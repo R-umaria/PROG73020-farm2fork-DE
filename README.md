@@ -1,6 +1,6 @@
 # Farm2Fork Delivery Execution Service
 
-Baseline backend + driver UI boilerplate for your team.
+Baseline backend + driver UI boilerplate.
 
 ## Stack
 - FastAPI backend
@@ -30,5 +30,5 @@ Then open:
 - Health: `http://localhost:8000/api/health`
 
 ## Notes
-The current repositories are in-memory placeholders so your team can start immediately.
+The current repositories are in-memory placeholders.
 Replace them with PostgreSQL-backed implementations as development proceeds.
