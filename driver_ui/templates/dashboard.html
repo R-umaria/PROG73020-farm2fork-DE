@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Driver Dashboard</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Driver Dashboard</h1>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/dashboard">Dashboard</a>
+    </nav>
+  </header>
+
+  <main class="dashboard-grid">
+    <section class="panel">
+      <h2>Assigned Deliveries</h2>
+      <div id="delivery-list" class="list">Loading deliveries...</div>
+    </section>
+
+    <section class="panel">
+      <h2>Map</h2>
+      <div id="map"></div>
+      <p class="note">Leaflet + OpenStreetMap tiles. Replace demo route logic with live directions later.</p>
+    </section>
+
+    <section class="panel full-width">
+      <h2>Route Details</h2>
+      <div id="route-summary">Select a delivery to show details.</div>
+    </section>
+  </main>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/map.js"></script>
+  <script src="/static/js/directions.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
