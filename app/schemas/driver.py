@@ -1,7 +1,5 @@
 from pydantic import BaseModel
 
-class DriverResponse(BaseModel):
-    id: int
-    name: str
-    vehicle_type: str
-    status: str
+class DriverScheduleResponse(BaseModel):
+    driver_id: int
+    stops: list[dict]

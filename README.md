@@ -1,34 +1,60 @@
-# Farm2Fork Delivery Execution Service
+# Farm2Fork Delivery Execution
 
-Baseline backend + driver UI boilerplate for your team.
+A simple shared repo for the Delivery Execution team.
 
-## Stack
-- FastAPI backend
-- PostgreSQL
-- SQLAlchemy
-- Alembic
-- HTML/CSS/JavaScript driver UI
-- Leaflet + OpenStreetMap for map rendering
+## Why this structure
+This layout is organized by the real workstreams of the module:
+- **intake**: receive order data from Order Orchestration
+- **planning**: geocoding, grouping, scheduling, route planning
+- **tracking**: customer-facing delivery status lookup
+- **driver**: driver schedule, start day, complete stop, driver UI
+- **integrations**: external API clients for other teams/services
 
-## Features included
-- `/api/health`
-- sample deliveries, drivers, assignments endpoints
-- driver dashboard page
-- Leaflet map scaffold
-- OpenStreetMap tiles
-- clean frontend/backend separation
+This keeps merge conflicts lower because teammates can mostly work in separate areas.
 
-## Run locally
+## Repo tree
+```text
+.
+├── .github/
+│   └── workflows/
+├── adr/
+├── alembic/
+├── app/
+│   ├── api/
+│   │   └── routes/
+│   ├── core/
+│   ├── integrations/
+│   ├── models/
+│   ├── repositories/
+│   ├── schemas/
+│   └── services/
+├── contracts/
+├── driver_ui/
+│   ├── static/
+│   └── templates/
+└── tests/
+    ├── api/
+    └── services/
+```
+
+## Suggested ownership map
+- **Rishi**: `contracts/`, `adr/`, `app/api/router.py`, architecture review of cross-area changes
+- **Krishi**: `app/models/`, `app/repositories/`, `alembic/`
+- **Mihir**: `app/integrations/`, intake/tracking API contracts, integration docs
+- **Mehak + Ceren**: `.github/`, `Dockerfile`, `docker-compose.yml`, environment setup
+- **Andy**: `tests/`, CI test checks, test data and validation rules
+- **Shared implementation areas**: `app/services/`, `app/api/routes/`, `driver_ui/`
+
+## Local run
 ```bash
 cp .env.example .env
-docker-compose up --build
+docker compose up --build
 ```
 
 Then open:
-- App: `http://localhost:8000/`
-- Dashboard: `http://localhost:8000/dashboard`
-- Health: `http://localhost:8000/api/health`
+- API root: `http://localhost:8000/api/health`
+- UI: `http://localhost:8000/`
+- Docs: `http://localhost:8000/docs`
 
-## Notes
-The current repositories are in-memory placeholders so your team can start immediately.
-Replace them with PostgreSQL-backed implementations as development proceeds.
+## Implementation rule
+Keep business logic in `services/`, DB access in `repositories/`, external calls in `integrations/`, and HTTP handling in `api/routes/`.
