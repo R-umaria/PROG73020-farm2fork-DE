@@ -1,0 +1,4 @@
+from app.repositories.customer_repository import CustomerRepository
+from app.repositories.delivery_request_repository import DeliveryRequestRepository
+from app.repositories.execution_repository import ExecutionRepository
+from app.repositories.planning_repository import PlanningRepository

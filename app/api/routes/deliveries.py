@@ -5,7 +5,7 @@ from app.services.delivery_service import DeliveryService
 router = APIRouter()
 service = DeliveryService()
 
-@router.get("/", response_model=list[DeliveryResponse])
+@router.get("/")
 def list_deliveries():
     return service.list_deliveries()
 
