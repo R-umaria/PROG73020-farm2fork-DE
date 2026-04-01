@@ -1,24 +1,24 @@
-version: "3.9"
+version: '3.9'
 
 services:
-  app:
-    build: .
-    container_name: delivery_app
-    ports:
-      - "8000:8000"
-    depends_on:
-      - db
-    env_file:
-      - .env
-    command: python run.py
-
   db:
     image: postgres:15
-    container_name: postgres_db
+    container_name: farm2fork_db
     restart: always
     environment:
-      POSTGRES_USER: user
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: delivery_db
+      POSTGRES_DB: farm2fork
     ports:
       - "5432:5432"
+
+  app:
+    build: .
+    container_name: farm2fork_api
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db:5432/farm2fork
+    ports:
+      - "8000:8000"
+    command: python run.py

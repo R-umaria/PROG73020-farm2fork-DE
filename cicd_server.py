@@ -1,33 +1,18 @@
 from flask import Flask, request, jsonify
 import subprocess
 import logging
-import sys
-
-print("CI/CD server file loaded...")
+import time
 
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
 
 def run_command(command):
-    logging.info(f"Running command: {' '.join(command)}")
-
     try:
-        result = subprocess.run(
-            command,
-            check=True,
-            capture_output=True,
-            text=True,
-            shell=True   # ✅ IMPORTANT for Windows
-        )
+        result = subprocess.run(command, check=True, capture_output=True, text=True)
         logging.info(result.stdout)
         return True
-
     except subprocess.CalledProcessError as e:
-        logging.error("Command failed!")
         logging.error(e.stderr)
         return False
 
@@ -42,9 +27,19 @@ def webhook():
 
     # 2. Start DB
     if not run_command(["docker-compose", "up", "-d", "db"]):
-        return jsonify({"status": "DB startup failed"}), 500
+        return jsonify({"status": "DB failed"}), 500
 
-    # 3. Unit Tests
+    time.sleep(5)
+
+    # 3. Run migrations
+    if not run_command([
+        "docker-compose", "exec", "app",
+        "alembic", "upgrade", "head"
+    ]):
+        logging.error("Migration failed")
+        return jsonify({"status": "Migration failed"}), 200
+
+    # 4. Unit tests
     if not run_command([
         "docker-compose", "run", "--rm", "app",
         "pytest", "tests/unit"
@@ -52,7 +47,7 @@ def webhook():
         logging.error("Unit tests failed")
         return jsonify({"status": "Unit tests failed"}), 200
 
-    # 4. Integration Tests
+    # 5. Integration tests
     if not run_command([
         "docker-compose", "run", "--rm", "app",
         "pytest", "tests/integration"
@@ -60,23 +55,13 @@ def webhook():
         logging.error("Integration tests failed")
         return jsonify({"status": "Integration tests failed"}), 200
 
-    # 5. Deploy
+    # 6. Deploy
     if not run_command(["docker-compose", "up", "-d"]):
-        return jsonify({"status": "Deployment failed"}), 500
+        return jsonify({"status": "Deploy failed"}), 500
 
-    logging.info("Deployment successful!")
     return jsonify({"status": "Deployment successful"}), 200
-
-
-@app.route("/", methods=["GET"])
-def home():
-    return "CI/CD Server Running"
 
 
 if __name__ == "__main__":
     print("Starting CI/CD server...")
-    try:
-        app.run(host="0.0.0.0", port=5000, debug=True)
-    except Exception as e:
-        print("ERROR STARTING SERVER:", e)
-        sys.exit(1)
+    app.run(host="0.0.0.0", port=5000, debug=True)
