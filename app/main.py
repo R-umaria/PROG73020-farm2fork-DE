@@ -3,7 +3,10 @@ from fastapi.staticfiles import StaticFiles
 from app.api.router import api_router, page_router
 
 # NEW
-from app.api.health import router as health_router
+# from app.api.health import router as health_router
+
+#the path above was wrong? ^^
+from app.api.routes.health import router as health_router
 
 app = FastAPI(title="Farm2Fork Delivery Execution Service")
 
