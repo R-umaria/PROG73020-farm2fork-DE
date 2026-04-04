@@ -7,36 +7,38 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def run_command(command):
-    try:
-        result = subprocess.run(
-            command,
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding="utf-8"
-        )
-        logging.info(result.stdout)
-        return True
-    except subprocess.CalledProcessError as e:
-        logging.error(e.stderr)
-        return False
+def run_command(command, fail_on_error=True):
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        encoding="utf-8"
+    )
+
+    logging.info(result.stdout)
+
+    if result.returncode != 0:
+        logging.warning(result.stderr)
+        if fail_on_error:
+            return False
+
+    return True
 
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
     logging.info("🚀 Webhook received. Starting CI/CD pipeline...")
 
-    # 1. Stop old containers
-    run_command(["docker-compose", "down"])
+    # 1. Stop old containers (safe)
+    run_command(["docker-compose", "down"], fail_on_error=False)
 
     # 2. Build containers
     if not run_command(["docker-compose", "build"]):
         return jsonify({"status": "Build failed"}), 500
 
-    # 3. Start DB only
+    # 3. Start DB
     logging.info("Starting DB container...")
-    run_command(["docker-compose", "up", "-d", "db"])
+    run_command(["docker-compose", "up", "-d", "db"], fail_on_error=False)
 
     logging.info("⏳ Waiting for DB to be ready...")
     time.sleep(10)
