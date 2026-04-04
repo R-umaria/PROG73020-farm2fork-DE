@@ -9,7 +9,13 @@ logging.basicConfig(level=logging.INFO)
 
 def run_command(command):
     try:
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
+        result = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8"
+        )
         logging.info(result.stdout)
         return True
     except subprocess.CalledProcessError as e:
@@ -19,47 +25,51 @@ def run_command(command):
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    logging.info("Webhook received. Starting CI/CD pipeline...")
+    logging.info("🚀 Webhook received. Starting CI/CD pipeline...")
 
-    # 1. Build
+    # 1. Stop old containers
+    run_command(["docker-compose", "down"])
+
+    # 2. Build containers
     if not run_command(["docker-compose", "build"]):
         return jsonify({"status": "Build failed"}), 500
 
-    # 2. Start DB
+    # 3. Start DB only
     if not run_command(["docker-compose", "up", "-d", "db"]):
         return jsonify({"status": "DB failed"}), 500
 
-    time.sleep(5)
+    logging.info("⏳ Waiting for DB to be ready...")
+    time.sleep(10)
 
-    # 3. Run migrations
+    # 4. Run migrations
     if not run_command([
-        "docker-compose", "exec", "app",
+        "docker-compose", "run", "--rm", "app",
         "alembic", "upgrade", "head"
     ]):
-        logging.error("Migration failed")
-        return jsonify({"status": "Migration failed"}), 200
+        return jsonify({"status": "Migration failed"}), 500
 
-    # 4. Unit tests
+    # 5. Start full app
+    if not run_command(["docker-compose", "up", "-d"]):
+        return jsonify({"status": "App start failed"}), 500
+
+    time.sleep(5)
+
+    # 6. Run unit tests
     if not run_command([
         "docker-compose", "run", "--rm", "app",
         "pytest", "tests/unit"
     ]):
-        logging.error("Unit tests failed")
         return jsonify({"status": "Unit tests failed"}), 200
 
-    # 5. Integration tests
+    # 7. Run integration tests
     if not run_command([
         "docker-compose", "run", "--rm", "app",
         "pytest", "tests/integration"
     ]):
-        logging.error("Integration tests failed")
         return jsonify({"status": "Integration tests failed"}), 200
 
-    # 6. Deploy
-    if not run_command(["docker-compose", "up", "-d"]):
-        return jsonify({"status": "Deploy failed"}), 500
-
-    return jsonify({"status": "Deployment successful"}), 200
+    logging.info("✅ Deployment successful!")
+    return jsonify({"status": "Success"}), 200
 
 
 if __name__ == "__main__":
