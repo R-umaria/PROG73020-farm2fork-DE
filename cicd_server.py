@@ -35,8 +35,8 @@ def webhook():
         return jsonify({"status": "Build failed"}), 500
 
     # 3. Start DB only
-    if not run_command(["docker-compose", "up", "-d", "db"]):
-        return jsonify({"status": "DB failed"}), 500
+    logging.info("Starting DB container...")
+    run_command(["docker-compose", "up", "-d", "db"])
 
     logging.info("⏳ Waiting for DB to be ready...")
     time.sleep(10)
