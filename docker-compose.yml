@@ -1,28 +1,25 @@
 services:
-  web:
-    build: .
-    container_name: farm2fork_de_api
+  db:
+    image: postgres:15
+    container_name: farm2fork_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: farm2fork
     ports:
-      - "8000:8000"
+      - "5432:5432"
+
+  app:
+    build: .
+    container_name: farm2fork_api
+    volumes:
+      - .:/app
     env_file:
       - .env
     depends_on:
       - db
-    volumes:
-      - .:/app
-
-  db:
-    image: postgres:15
-    container_name: farm2fork_de_db
-    restart: always
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: farm2fork
+      DATABASE_URL: postgresql://postgres:password@db:5432/farm2fork
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:
+      - "8000:8000"

@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+
 from app.api.router import api_router, page_router
 from app.core.config import settings
 
