@@ -1,4 +1,21 @@
 class DriverService:
+    # MOCK IMPLEMENTATION - In a real application, this would interact with a database or external API
+    def list_drivers(self):
+        return [
+            {
+                "id": 1,
+                "name": "Alex Carter",
+                "vehicle_type": "Van",
+                "status": "available",
+            },
+            {
+                "id": 2,
+                "name": "Priya Singh",
+                "vehicle_type": "Truck",
+                "status": "on_route",
+            },
+        ]
+
     def get_todays_schedule(self, driver_id: int):
         return {
             "driver_id": driver_id,

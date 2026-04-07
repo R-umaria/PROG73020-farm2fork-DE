@@ -1,3 +1,5 @@
+import path from "path"
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: {
@@ -6,6 +8,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  allowedDevOrigins: ["localhost"],
 }
 
 export default nextConfig
