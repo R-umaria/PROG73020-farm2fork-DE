@@ -1,4 +1,13 @@
+from app.repositories.driver_repository import DriverRepository
+
 class DriverService:
+    def __init__(self):
+        # Initialize the repository first
+        self.repo = DriverRepository()
+
+    def list_drivers(self):
+        return self.repo.list_all()
+
     def get_todays_schedule(self, driver_id: int):
         return {
             "driver_id": driver_id,
@@ -13,5 +22,3 @@ class DriverService:
 
     def complete_stop(self, route_stop_id: int):
         return {"route_stop_id": route_stop_id, "message": "Stop marked complete"}
-    def list_drivers(self):
-        return self.repo.list_all()
