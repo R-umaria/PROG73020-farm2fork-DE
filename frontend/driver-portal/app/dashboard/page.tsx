@@ -26,7 +26,7 @@ const todayDeliveries = [
     address: "1234 Rural Route 7, Riverside",
     timeWindow: "8:00 - 9:00 AM",
     deliveryType: "Produce Box",
-    status: "completed" as const,
+    status: "delivered" as const,
   },
   {
     id: "2",
@@ -35,7 +35,7 @@ const todayDeliveries = [
     address: "567 Market Street, Downtown",
     timeWindow: "9:30 - 10:30 AM",
     deliveryType: "Mixed Crate",
-    status: "in-progress" as const,
+    status: "out_for_delivery" as const,
   },
   {
     id: "3",
@@ -44,7 +44,7 @@ const todayDeliveries = [
     address: "890 Main Avenue, Midtown",
     timeWindow: "11:00 AM - 12:00 PM",
     deliveryType: "Restaurant Order",
-    status: "pending" as const,
+    status: "scheduled" as const,
   },
   {
     id: "4",
@@ -53,7 +53,7 @@ const todayDeliveries = [
     address: "234 Oak Boulevard, Westside",
     timeWindow: "12:30 - 1:30 PM",
     deliveryType: "Bulk Produce",
-    status: "pending" as const,
+    status: "scheduled" as const,
   },
   {
     id: "5",
@@ -62,15 +62,15 @@ const todayDeliveries = [
     address: "456 Pine Street, Eastside",
     timeWindow: "2:00 - 3:00 PM",
     deliveryType: "Produce Box",
-    status: "pending" as const,
+    status: "scheduled" as const,
   },
 ]
 
 export default function DashboardPage() {
   const router = useRouter()
   
-  const completedCount = todayDeliveries.filter(d => d.status === "completed").length
-  const pendingCount = todayDeliveries.filter(d => d.status === "pending" || d.status === "in-progress").length
+  const completedCount = todayDeliveries.filter(d => d.status === "delivered").length
+  const pendingCount = todayDeliveries.filter(d => d.status === "scheduled" || d.status === "out_for_delivery").length
 
   return (
     <AppShell>
@@ -86,7 +86,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <StatusBadge status="in-progress" />
+                <StatusBadge status="out_for_delivery" />
               </div>
               <p className="text-sm text-white/70 mt-2">
                 Route NE-47 | North Valley Region
@@ -122,14 +122,14 @@ export default function DashboardPage() {
             variant="default"
           />
           <MetricCard
-            title="Completed"
+            title="Delivered"
             value={completedCount}
             subtitle={`${Math.round((completedCount / todayDeliveries.length) * 100)}% done`}
             icon={CheckCircle2}
             variant="primary"
           />
           <MetricCard
-            title="Pending"
+            title="Scheduled"
             value={pendingCount}
             subtitle="remaining"
             icon={Clock}
@@ -174,7 +174,7 @@ export default function DashboardPage() {
               <DeliveryCard
                 key={delivery.id}
                 {...delivery}
-                isActive={delivery.status === "in-progress"}
+                isActive={delivery.status === "out_for_delivery"}
                 onClick={() => router.push(`/deliveries/${delivery.id}`)}
               />
             ))}

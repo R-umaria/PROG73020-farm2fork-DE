@@ -12,3 +12,16 @@ Keep this file updated whenever request/response shapes change.
 - `GET /api/driver/schedule/today/{driver_id}`
 - `POST /api/driver/start-day/{driver_id}`
 - `POST /api/driver/stops/{route_stop_id}/complete`
+- `POST /api/deliveries/{delivery_execution_id}/start`
+- `POST /api/deliveries/{delivery_execution_id}/complete`
+- `POST /api/deliveries/{delivery_execution_id}/fail`
+
+## Delivery execution status values
+All delivery execution APIs must use these canonical values:
+- `scheduled`
+- `out_for_delivery`
+- `delivered`
+- `failed`
+
+## Delivery action transition behavior
+- Delivery action endpoints return `409 Conflict` when a requested status change violates the allowed delivery execution transitions.

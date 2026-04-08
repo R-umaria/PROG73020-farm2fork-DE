@@ -1,5 +1,6 @@
 "use client"
 
+import { type DeliveryStatus } from "@/lib/delivery-status"
 import { cn } from "@/lib/utils"
 import { StatusBadge } from "./status-badge"
 import { MapPin, Clock, Package, ChevronRight } from "lucide-react"
@@ -10,7 +11,7 @@ interface DeliveryCardProps {
   address: string
   timeWindow: string
   deliveryType: string
-  status: "pending" | "in-progress" | "completed" | "delayed" | "exception"
+  status: DeliveryStatus
   isActive?: boolean
   onClick?: () => void
   className?: string
@@ -40,28 +41,26 @@ export function DeliveryCard({
       }}
       className={cn(
         "relative bg-card rounded-xl p-4 transition-all border",
-        isActive 
-          ? "border-[var(--muted-teal)] shadow-lg shadow-[var(--muted-teal)]/10 ring-1 ring-[var(--muted-teal)]/20" 
+        isActive
+          ? "border-[var(--muted-teal)] shadow-lg shadow-[var(--muted-teal)]/10 ring-1 ring-[var(--muted-teal)]/20"
           : "border-border hover:border-[var(--muted-teal)]/50 hover:shadow-md",
         onClick && "cursor-pointer",
-        status === "completed" && "opacity-75",
+        status === "delivered" && "opacity-75",
         className
       )}
     >
       <div className="flex items-start gap-3">
-        {/* Stop Number Badge */}
         <div className={cn(
           "flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm",
-          isActive 
+          isActive
             ? "bg-[var(--muted-teal)] text-[var(--evergreen)]"
-            : status === "completed"
+            : status === "delivered"
               ? "bg-[var(--muted-teal)]/20 text-[var(--muted-teal)]"
               : "bg-[var(--twilight-indigo)]/10 text-[var(--twilight-indigo)]"
         )}>
           #{stopNumber}
         </div>
 
-        {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -93,7 +92,6 @@ export function DeliveryCard({
         )}
       </div>
 
-      {/* Active Indicator */}
       {isActive && (
         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-[var(--muted-teal)] rounded-r-full" />
       )}

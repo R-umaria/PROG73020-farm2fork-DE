@@ -17,11 +17,11 @@ import {
 } from "lucide-react"
 
 const routeStops = [
-  { id: "1", name: "Green Valley Farms", status: "completed" as const },
-  { id: "2", name: "Sunrise Organic Co-op", status: "in-progress" as const },
-  { id: "3", name: "The Corner Bistro", status: "pending" as const },
-  { id: "4", name: "Healthy Harvest Market", status: "pending" as const },
-  { id: "5", name: "Farm Fresh Deli", status: "pending" as const },
+  { id: "1", name: "Green Valley Farms", status: "delivered" as const },
+  { id: "2", name: "Sunrise Organic Co-op", status: "out_for_delivery" as const },
+  { id: "3", name: "The Corner Bistro", status: "scheduled" as const },
+  { id: "4", name: "Healthy Harvest Market", status: "scheduled" as const },
+  { id: "5", name: "Farm Fresh Deli", status: "scheduled" as const },
 ]
 
 const deliveryDetails = [
@@ -32,7 +32,7 @@ const deliveryDetails = [
     address: "1234 Rural Route 7, Riverside",
     timeWindow: "8:00 - 9:00 AM",
     deliveryType: "Produce Box",
-    status: "completed" as const,
+    status: "delivered" as const,
   },
   {
     id: "2",
@@ -41,7 +41,7 @@ const deliveryDetails = [
     address: "567 Market Street, Downtown",
     timeWindow: "9:30 - 10:30 AM",
     deliveryType: "Mixed Crate",
-    status: "in-progress" as const,
+    status: "out_for_delivery" as const,
   },
   {
     id: "3",
@@ -50,7 +50,7 @@ const deliveryDetails = [
     address: "890 Main Avenue, Midtown",
     timeWindow: "11:00 AM - 12:00 PM",
     deliveryType: "Restaurant Order",
-    status: "pending" as const,
+    status: "scheduled" as const,
   },
   {
     id: "4",
@@ -59,7 +59,7 @@ const deliveryDetails = [
     address: "234 Oak Boulevard, Westside",
     timeWindow: "12:30 - 1:30 PM",
     deliveryType: "Bulk Produce",
-    status: "pending" as const,
+    status: "scheduled" as const,
   },
   {
     id: "5",
@@ -68,7 +68,7 @@ const deliveryDetails = [
     address: "456 Pine Street, Eastside",
     timeWindow: "2:00 - 3:00 PM",
     deliveryType: "Produce Box",
-    status: "pending" as const,
+    status: "scheduled" as const,
   },
 ]
 
@@ -157,7 +157,7 @@ export default function RouteOverviewPage() {
           </div>
         </div>
 
-        {/* Navigate to Active Button */}
+        {/* Navigate to In Transit Button */}
         <Button
           onClick={() => router.push("/deliveries/2")}
           className="w-full h-14 bg-[var(--muted-teal)] hover:bg-[var(--muted-teal)]/90 text-[var(--evergreen)] font-semibold text-base rounded-xl"
@@ -184,7 +184,7 @@ export default function RouteOverviewPage() {
               <DeliveryCard
                 key={delivery.id}
                 {...delivery}
-                isActive={delivery.status === "in-progress"}
+                isActive={delivery.status === "out_for_delivery"}
                 onClick={() => router.push(`/deliveries/${delivery.id}`)}
               />
             ))}
