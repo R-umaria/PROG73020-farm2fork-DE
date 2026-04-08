@@ -13,3 +13,5 @@ class DriverService:
 
     def complete_stop(self, route_stop_id: int):
         return {"route_stop_id": route_stop_id, "message": "Stop marked complete"}
+    def list_drivers(self):
+        return self.repo.list_all()
