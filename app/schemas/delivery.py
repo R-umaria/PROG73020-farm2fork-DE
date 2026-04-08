@@ -1,17 +1,21 @@
-from pydantic import BaseModel
+from __future__ import annotations
 
-class DeliveryCreate(BaseModel):
-    order_id: str
-    customer_name: str
-    address: str
-    latitude: float
-    longitude: float
+from datetime import datetime
+from uuid import UUID
 
-class DeliveryResponse(BaseModel):
-    id: int
-    order_id: str
-    customer_name: str
-    address: str
-    status: str
-    latitude: float
-    longitude: float
+from pydantic import ConfigDict
+
+from app.schemas.intake import DeliveryItemCreate, DeliveryRequestCreate
+
+
+class DeliveryCreate(DeliveryRequestCreate):
+    model_config = ConfigDict(title="ManualDeliveryCreateV1")
+
+
+class DeliveryResponse(DeliveryRequestCreate):
+    model_config = ConfigDict(from_attributes=True, title="DeliveryResponseV1")
+
+    id: UUID
+    request_status: str
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
