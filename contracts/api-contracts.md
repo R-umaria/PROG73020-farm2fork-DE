@@ -25,18 +25,40 @@ Request body:
 }
 ```
 
-Response body:
+Response body on first create (`201 Created`):
 ```json
 {
-  "message": "Delivery request accepted (v1); persistence not implemented in this intake path yet",
+  "message": "Delivery request persisted (v1)",
   "order_id": 1001,
-  "request_status": "received"
+  "request_status": "received",
+  "delivery_request_id": "2ec537a9-8b7e-4fe9-981a-823f670f12d0"
+}
+```
+
+Response body on idempotent duplicate with the same payload (`200 OK`):
+```json
+{
+  "message": "Delivery request already received (v1)",
+  "order_id": 1001,
+  "request_status": "received",
+  "delivery_request_id": "2ec537a9-8b7e-4fe9-981a-823f670f12d0"
+}
+```
+
+Conflicting duplicate response (`409 Conflict`):
+```json
+{
+  "detail": "Conflicting delivery request already exists for order_id 1001"
 }
 ```
 
 Notes:
-- `delivery_request_id` may be returned later by this route when intake persistence is implemented.
+- Intake now persists the `DeliveryRequest` record, the raw request snapshot, and child `DeliveryItem` rows.
+- Idempotency is keyed on `order_id`.
+- Repeating the same payload for the same `order_id` returns the existing `delivery_request_id` without overwriting persisted data.
+- Repeating a different payload for the same `order_id` is rejected with `409 Conflict`.
 - `request_status` reflects the Delivery Execution intake/request record, not the delivery execution status model.
+- `request_timestamp` must include a timezone offset.
 
 ### `POST /api/delivery-requests/{delivery_request_id}/customer-sync`
 Placeholder contract for customer data sync linked to an existing delivery request record.
@@ -52,8 +74,8 @@ Response body:
 
 ## Manual/non-primary delivery record route (v1)
 ### `POST /api/deliveries/`
-Non-primary manual creation path. This persists a `DeliveryRequest` record using the same v1 payload shape as intake.
-Prefer `POST /api/delivery-requests/` for the primary intake contract.
+Non-primary manual creation path. This persists a `DeliveryRequest` record using the same v1 payload shape as intake, but it is not the canonical idempotent intake path.
+Prefer `POST /api/delivery-requests/` for the primary intake contract and duplicate-handling behavior.
 
 Request body:
 ```json

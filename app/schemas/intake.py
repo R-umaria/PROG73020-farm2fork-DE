@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class DeliveryItemCreate(BaseModel):
@@ -22,6 +22,14 @@ class DeliveryRequestCreate(BaseModel):
     customer_id: int
     request_timestamp: datetime
     items: list[DeliveryItemCreate] = Field(default_factory=list)
+
+
+    @field_validator("request_timestamp")
+    @classmethod
+    def validate_request_timestamp(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("request_timestamp must include a timezone offset")
+        return value.astimezone(UTC)
 
 
 class IntakeResponse(BaseModel):

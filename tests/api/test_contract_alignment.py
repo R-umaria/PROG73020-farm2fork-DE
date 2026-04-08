@@ -20,6 +20,8 @@ V1_PAYLOAD = {
 
 
 def test_intake_v1_request_and_response_shape(monkeypatch):
+    delivery_request_id = uuid4()
+
     def fake_receive_delivery_request(payload):
         assert payload.order_id == 1001
         assert payload.customer_id == 501
@@ -27,10 +29,10 @@ def test_intake_v1_request_and_response_shape(monkeypatch):
         assert len(payload.items) == 1
         assert payload.items[0].external_item_id == 9001
         return {
-            "message": "Delivery request accepted (v1); persistence not implemented in this intake path yet",
+            "message": "Delivery request persisted (v1)",
             "order_id": payload.order_id,
             "request_status": "received",
-            "delivery_request_id": None,
+            "delivery_request_id": delivery_request_id,
         }
 
     monkeypatch.setattr(intake.service, "receive_delivery_request", fake_receive_delivery_request)
@@ -39,9 +41,10 @@ def test_intake_v1_request_and_response_shape(monkeypatch):
 
     assert response.status_code == 201
     assert response.json() == {
-        "message": "Delivery request accepted (v1); persistence not implemented in this intake path yet",
+        "message": "Delivery request persisted (v1)",
         "order_id": 1001,
         "request_status": "received",
+        "delivery_request_id": str(delivery_request_id),
     }
 
 

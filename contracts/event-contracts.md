@@ -25,7 +25,9 @@ Inbound event/payload shape represented by the delivery request snapshot:
 
 Notes:
 - This aligns to the current `DeliveryRequest` aggregate root and `DeliveryItem` child records.
+- The raw inbound payload is persisted as a delivery request snapshot for traceability and duplicate comparison.
 - Customer address/contact enrichment remains outside this payload until customer sync is implemented.
+- Duplicate handling is keyed by `order_id`: the same payload is idempotent, while a conflicting payload for the same `order_id` is rejected.
 
 ## DeliveryStatusUpdated (v1)
 Current tracking/status payload shape:
