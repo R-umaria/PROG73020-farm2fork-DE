@@ -59,3 +59,26 @@ Current tracking/status payload shape:
 - `out_for_delivery` → `delivered`
 - `out_for_delivery` → `failed`
 - `delivered` and `failed` are terminal for the current implementation
+
+
+## DriverAssigned (v1)
+Current planning/read-model shape for a route-group driver assignment:
+
+```json
+{
+  "route_group_id": "2ec537a9-8b7e-4fe9-981a-823f670f12d0",
+  "driver_assignment": {
+    "driver_id": 2,
+    "driver_name": "Sam Patel",
+    "vehicle_type": "Bike",
+    "driver_status": "available",
+    "assignment_status": "assigned",
+    "current_load_before_assignment": 0
+  }
+}
+```
+
+Notes:
+- Driver field names intentionally match the upstream Driver Service roster contract.
+- `assignment_status` belongs to Delivery Execution and remains distinct from upstream `driver_status`.
+- Route-stop `stop_status` remains distinct from delivery execution status transitions.

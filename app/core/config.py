@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     geocoding_base_url: str = "http://geocoding-service:8000"
     geocoding_lookup_path: str = "/api/geocode"
     geocoding_timeout_seconds: float = 5.0
+    driver_service_base_url: str = "http://driver-service:8000"
+    driver_service_drivers_path: str = "/api/drivers"
+    driver_service_timeout_seconds: float = 5.0
+    driver_service_enable_dev_fallback: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

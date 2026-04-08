@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.driver import DriverSummaryResponse
+
 
 class BacklogPlanningCandidate(BaseModel):
     model_config = ConfigDict(title="BacklogPlanningCandidateV1")
@@ -52,12 +54,9 @@ class GroupBacklogResponse(BaseModel):
     skipped_requests: list[BacklogPlanningSkip]
 
 
-class ScheduledDriverAssignment(BaseModel):
+class ScheduledDriverAssignment(DriverSummaryResponse):
     model_config = ConfigDict(title="ScheduledDriverAssignmentV1")
 
-    driver_id: int
-    driver_name: str
-    vehicle_type: str
     assignment_status: str
     current_load_before_assignment: int
 
