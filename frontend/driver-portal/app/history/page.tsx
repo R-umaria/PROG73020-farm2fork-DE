@@ -14,7 +14,7 @@ import {
   Filter
 } from "lucide-react"
 
-type FilterTab = "all" | "pending" | "completed" | "exceptions"
+type FilterTab = "all" | "scheduled" | "delivered" | "exceptions"
 
 const deliveryHistory = [
   {
@@ -24,7 +24,7 @@ const deliveryHistory = [
     address: "1234 Rural Route 7, Riverside",
     timeWindow: "8:00 - 9:00 AM",
     completedTime: "8:45 AM",
-    status: "completed" as const,
+    status: "delivered" as const,
   },
   {
     id: "2",
@@ -33,7 +33,7 @@ const deliveryHistory = [
     address: "567 Market Street, Downtown",
     timeWindow: "9:30 - 10:30 AM",
     completedTime: null,
-    status: "in-progress" as const,
+    status: "out_for_delivery" as const,
   },
   {
     id: "3",
@@ -42,7 +42,7 @@ const deliveryHistory = [
     address: "890 Main Avenue, Midtown",
     timeWindow: "11:00 AM - 12:00 PM",
     completedTime: null,
-    status: "pending" as const,
+    status: "scheduled" as const,
   },
   {
     id: "4",
@@ -51,7 +51,7 @@ const deliveryHistory = [
     address: "234 Oak Boulevard, Westside",
     timeWindow: "12:30 - 1:30 PM",
     completedTime: null,
-    status: "pending" as const,
+    status: "scheduled" as const,
   },
   {
     id: "5",
@@ -60,14 +60,14 @@ const deliveryHistory = [
     address: "456 Pine Street, Eastside",
     timeWindow: "2:00 - 3:00 PM",
     completedTime: null,
-    status: "pending" as const,
+    status: "scheduled" as const,
   },
 ]
 
 const tabs: { id: FilterTab; label: string; count: number }[] = [
   { id: "all", label: "All", count: 5 },
-  { id: "pending", label: "Pending", count: 3 },
-  { id: "completed", label: "Completed", count: 1 },
+  { id: "scheduled", label: "Scheduled", count: 3 },
+  { id: "delivered", label: "Delivered", count: 1 },
   { id: "exceptions", label: "Exceptions", count: 0 },
 ]
 
@@ -77,14 +77,14 @@ export default function HistoryPage() {
 
   const filteredDeliveries = deliveryHistory.filter(delivery => {
     if (activeTab === "all") return true
-    if (activeTab === "pending") return delivery.status === "pending" || delivery.status === "in-progress"
-    if (activeTab === "completed") return delivery.status === "completed"
-    if (activeTab === "exceptions") return delivery.status === "exception" || delivery.status === "delayed"
+    if (activeTab === "scheduled") return delivery.status === "scheduled" || delivery.status === "out_for_delivery"
+    if (activeTab === "delivered") return delivery.status === "delivered"
+    if (activeTab === "exceptions") return delivery.status === "failed"
     return true
   })
 
-  const completedCount = deliveryHistory.filter(d => d.status === "completed").length
-  const pendingCount = deliveryHistory.filter(d => d.status === "pending" || d.status === "in-progress").length
+  const completedCount = deliveryHistory.filter(d => d.status === "delivered").length
+  const pendingCount = deliveryHistory.filter(d => d.status === "scheduled" || d.status === "out_for_delivery").length
 
   return (
     <AppShell>
@@ -106,7 +106,7 @@ export default function HistoryPage() {
               <CheckCircle2 className="w-5 h-5" />
               <span className="text-2xl font-bold">{completedCount}</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Completed</p>
+            <p className="text-xs text-muted-foreground mt-1">Delivered</p>
           </div>
           <div className="w-px h-12 bg-border" />
           <div className="flex-1 text-center">
@@ -168,7 +168,7 @@ export default function HistoryPage() {
                 onClick={() => router.push(`/deliveries/${delivery.id}`)}
                 className={cn(
                   "w-full bg-card rounded-xl p-4 border transition-all text-left",
-                  delivery.status === "in-progress"
+                  delivery.status === "out_for_delivery"
                     ? "border-[var(--muted-teal)] shadow-md"
                     : "border-border hover:border-[var(--muted-teal)]/50"
                 )}
@@ -177,13 +177,13 @@ export default function HistoryPage() {
                   {/* Stop Number */}
                   <div className={cn(
                     "flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm",
-                    delivery.status === "completed"
+                    delivery.status === "delivered"
                       ? "bg-[var(--muted-teal)] text-[var(--evergreen)]"
-                      : delivery.status === "in-progress"
+                      : delivery.status === "out_for_delivery"
                         ? "bg-[var(--midnight-violet)] text-white"
                         : "bg-muted text-muted-foreground"
                   )}>
-                    {delivery.status === "completed" ? (
+                    {delivery.status === "delivered" ? (
                       <CheckCircle2 className="w-5 h-5" />
                     ) : (
                       `#${delivery.stopNumber}`
@@ -212,7 +212,7 @@ export default function HistoryPage() {
                       </div>
                       {delivery.completedTime && (
                         <span className="text-xs text-[var(--muted-teal)] font-medium">
-                          Completed {delivery.completedTime}
+                          Delivered {delivery.completedTime}
                         </span>
                       )}
                     </div>

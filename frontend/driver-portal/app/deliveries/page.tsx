@@ -20,7 +20,7 @@ const allDeliveries = [
     address: "1234 Rural Route 7, Riverside",
     timeWindow: "8:00 - 9:00 AM",
     deliveryType: "Produce Box",
-    status: "completed" as const,
+    status: "delivered" as const,
   },
   {
     id: "2",
@@ -29,7 +29,7 @@ const allDeliveries = [
     address: "567 Market Street, Downtown",
     timeWindow: "9:30 - 10:30 AM",
     deliveryType: "Mixed Crate",
-    status: "in-progress" as const,
+    status: "out_for_delivery" as const,
   },
   {
     id: "3",
@@ -38,7 +38,7 @@ const allDeliveries = [
     address: "890 Main Avenue, Midtown",
     timeWindow: "11:00 AM - 12:00 PM",
     deliveryType: "Restaurant Order",
-    status: "pending" as const,
+    status: "scheduled" as const,
   },
   {
     id: "4",
@@ -47,7 +47,7 @@ const allDeliveries = [
     address: "234 Oak Boulevard, Westside",
     timeWindow: "12:30 - 1:30 PM",
     deliveryType: "Bulk Produce",
-    status: "pending" as const,
+    status: "scheduled" as const,
   },
   {
     id: "5",
@@ -56,7 +56,7 @@ const allDeliveries = [
     address: "456 Pine Street, Eastside",
     timeWindow: "2:00 - 3:00 PM",
     deliveryType: "Produce Box",
-    status: "pending" as const,
+    status: "scheduled" as const,
   },
 ]
 
@@ -94,19 +94,19 @@ export default function DeliveriesPage() {
           <div className="flex-1 bg-[var(--muted-teal)]/10 rounded-xl p-3 border border-[var(--muted-teal)]/20">
             <div className="flex items-center gap-2">
               <Package className="w-4 h-4 text-[var(--muted-teal)]" />
-              <span className="text-sm font-medium text-foreground">1 Completed</span>
+              <span className="text-sm font-medium text-foreground">1 Delivered</span>
             </div>
           </div>
           <div className="flex-1 bg-[var(--midnight-violet)]/10 rounded-xl p-3 border border-[var(--midnight-violet)]/20">
             <div className="flex items-center gap-2">
               <Package className="w-4 h-4 text-[var(--midnight-violet)]" />
-              <span className="text-sm font-medium text-foreground">1 Active</span>
+              <span className="text-sm font-medium text-foreground">1 In Transit</span>
             </div>
           </div>
           <div className="flex-1 bg-muted rounded-xl p-3 border border-border">
             <div className="flex items-center gap-2">
               <Package className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-foreground">3 Pending</span>
+              <span className="text-sm font-medium text-foreground">3 Scheduled</span>
             </div>
           </div>
         </div>
@@ -121,7 +121,7 @@ export default function DeliveriesPage() {
               <DeliveryCard
                 key={delivery.id}
                 {...delivery}
-                isActive={delivery.status === "in-progress"}
+                isActive={delivery.status === "out_for_delivery"}
                 onClick={() => router.push(`/deliveries/${delivery.id}`)}
               />
             ))}
