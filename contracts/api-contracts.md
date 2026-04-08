@@ -157,6 +157,61 @@ Determinism rules:
 - Candidates inside each group are sorted by `request_timestamp`, then `order_id`, then `delivery_request_id`.
 - Postal prefixes are normalized by removing spaces/punctuation and taking the first three alphanumeric characters.
 
+## Planning route scheduling contract (v1)
+### `POST /api/planning/schedule`
+Creates `RouteGroup` and `RouteStop` records from the current eligible grouped backlog, then applies the default deterministic driver-assignment heuristic.
+
+Success response (`200 OK`):
+```json
+{
+  "message": "Route groups scheduled deterministically (v1)",
+  "scheduled_group_count": 2,
+  "assigned_group_count": 2,
+  "unassigned_group_count": 0,
+  "route_groups": [
+    {
+      "route_group_id": "2ec537a9-8b7e-4fe9-981a-823f670f12d0",
+      "group_key": "delivery:postal_prefix:M5V",
+      "route_group_name": "route-group:delivery:postal_prefix:M5V:20260408T123000Z",
+      "handling_type": "delivery",
+      "zone_code": "postal_prefix:M5V",
+      "scheduled_date": "2026-04-08T12:30:00Z",
+      "route_group_status": "scheduled",
+      "total_stops": 2,
+      "driver_assignment": {
+        "driver_id": 2,
+        "driver_name": "Sam Patel",
+        "vehicle_type": "Bike",
+        "assignment_status": "assigned",
+        "current_load_before_assignment": 0
+      },
+      "stops": [
+        {
+          "route_stop_id": "1a17d827-4e53-4b15-b90d-2df0b57fa0c5",
+          "delivery_request_id": "3f157fb6-140f-4c25-a2e7-42daf4f35e13",
+          "order_id": 1001,
+          "sequence": 1,
+          "stop_status": "planned",
+          "estimated_arrival": "2026-04-08T12:30:00Z"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Scheduling rules:
+- One route group is created for each grouped backlog partition.
+- Route-group scheduling uses the earliest candidate `request_timestamp` in the group.
+- Route-stop sequence reuses the deterministic grouped candidate order.
+- Simple estimated arrivals are produced in 15-minute increments for sequencing only.
+
+Driver assignment rules:
+- Only drivers with status `available` are eligible.
+- The default policy prefers lower current active assignment load.
+- Ties are broken deterministically by `driver_id`, then driver name.
+- If no available driver exists, the route group is still created and returned without a `driver_assignment`.
+
 ## Manual/non-primary delivery record route (v1)
 ### `POST /api/deliveries/`
 Non-primary manual creation path. This persists a `DeliveryRequest` record using the same v1 payload shape as intake, but it is not the canonical idempotent intake path.

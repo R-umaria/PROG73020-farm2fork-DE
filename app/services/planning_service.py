@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from datetime import timedelta
 from typing import Literal
 
 from sqlalchemy.orm import Session
@@ -13,16 +14,26 @@ from app.schemas.planning import (
     BacklogPlanningGroup,
     BacklogPlanningSkip,
     GroupBacklogResponse,
+    ScheduleRoutesResponse,
+    ScheduledDriverAssignment,
+    ScheduledRouteGroup,
+    ScheduledRouteStop,
 )
+from app.services.driver_assignment_policy import DriverAssignmentPolicy
 
 RegionSource = Literal["postal_prefix", "city_province"]
 HandlingType = Literal["delivery", "pickup"]
 
 
 class PlanningService:
-    def __init__(self, db: Session | None = None):
+    def __init__(
+        self,
+        db: Session | None = None,
+        driver_assignment_policy: DriverAssignmentPolicy | None = None,
+    ):
         self.db: Session = db or SessionLocal()
         self.repo = PlanningRepository(self.db)
+        self.driver_assignment_policy = driver_assignment_policy or DriverAssignmentPolicy()
 
     def geocode_pending_requests(self):
         return {"message": "Pending addresses geocoded placeholder"}
@@ -100,8 +111,82 @@ class PlanningService:
             skipped_requests=sorted_skips,
         )
 
-    def schedule_routes(self):
-        return {"message": "Route scheduling placeholder"}
+    def schedule_routes(self) -> ScheduleRoutesResponse:
+        grouped_backlog = self.group_backlog()
+        scheduled_groups: list[ScheduledRouteGroup] = []
+
+        for planning_group in grouped_backlog.groups:
+            first_candidate = planning_group.candidates[0]
+            scheduled_date = first_candidate.request_timestamp
+            route_group = self.repo.create_route_group(
+                name=self._route_group_name(planning_group.group_key, scheduled_date),
+                scheduled_date=scheduled_date,
+                status="scheduled",
+                zone_code=planning_group.region_key,
+                total_stops=planning_group.request_count,
+            )
+
+            scheduled_stops: list[ScheduledRouteStop] = []
+            for index, candidate in enumerate(planning_group.candidates, start=1):
+                estimated_arrival = scheduled_date + timedelta(minutes=15 * (index - 1))
+                route_stop = self.repo.add_route_stop(
+                    route_group_id=route_group.id,
+                    delivery_request_id=candidate.delivery_request_id,
+                    sequence=index,
+                    estimated_arrival=estimated_arrival,
+                    stop_status="planned",
+                )
+                scheduled_stops.append(
+                    ScheduledRouteStop(
+                        route_stop_id=route_stop.id,
+                        delivery_request_id=candidate.delivery_request_id,
+                        order_id=candidate.order_id,
+                        sequence=index,
+                        stop_status=route_stop.stop_status,
+                        estimated_arrival=estimated_arrival,
+                    )
+                )
+
+            selected_driver = self.driver_assignment_policy.select_driver(self.repo.get_active_driver_loads())
+            driver_assignment = None
+            if selected_driver is not None:
+                assignment = self.repo.assign_driver(
+                    route_group_id=route_group.id,
+                    driver_id=selected_driver.driver.id,
+                    assignment_status="assigned",
+                )
+                driver_assignment = ScheduledDriverAssignment(
+                    driver_id=assignment.driver_id,
+                    driver_name=selected_driver.driver.name,
+                    vehicle_type=selected_driver.driver.vehicle_type,
+                    assignment_status=assignment.assignment_status,
+                    current_load_before_assignment=selected_driver.current_load,
+                )
+
+            scheduled_groups.append(
+                ScheduledRouteGroup(
+                    route_group_id=route_group.id,
+                    group_key=planning_group.group_key,
+                    route_group_name=route_group.name,
+                    handling_type=planning_group.handling_type,
+                    zone_code=route_group.zone_code,
+                    scheduled_date=route_group.scheduled_date,
+                    route_group_status=route_group.status,
+                    total_stops=route_group.total_stops,
+                    driver_assignment=driver_assignment,
+                    stops=scheduled_stops,
+                )
+            )
+
+        assigned_group_count = sum(1 for group in scheduled_groups if group.driver_assignment is not None)
+        unassigned_group_count = len(scheduled_groups) - assigned_group_count
+        return ScheduleRoutesResponse(
+            message="Route groups scheduled deterministically (v1)",
+            scheduled_group_count=len(scheduled_groups),
+            assigned_group_count=assigned_group_count,
+            unassigned_group_count=unassigned_group_count,
+            route_groups=scheduled_groups,
+        )
 
     def close(self) -> None:
         self.db.close()
@@ -157,6 +242,11 @@ class PlanningService:
             return "pickup"
 
         return "delivery"
+
+    @staticmethod
+    def _route_group_name(group_key: str, scheduled_date) -> str:
+        normalized_group_key = group_key.replace(" ", "_")
+        return f"route-group:{normalized_group_key}:{scheduled_date.strftime('%Y%m%dT%H%M%SZ')}"
 
     @staticmethod
     def _postal_prefix(postal_code: str | None) -> str | None:

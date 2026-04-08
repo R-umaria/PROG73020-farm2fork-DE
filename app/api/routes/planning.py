@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.schemas.planning import GroupBacklogResponse, PlanningResponse
+from app.schemas.planning import GroupBacklogResponse, PlanningResponse, ScheduleRoutesResponse
 from app.services.planning_service import PlanningService
 
 router = APIRouter()
@@ -22,6 +22,11 @@ def group_backlog():
     return service.group_backlog()
 
 
-@router.post("/schedule", response_model=PlanningResponse)
+@router.post(
+    "/schedule",
+    response_model=ScheduleRoutesResponse,
+    summary="Schedule deterministic route groups and apply default driver assignment (v1)",
+    response_description="Creates route groups and route stops from eligible grouped backlog, then applies the default deterministic driver assignment heuristic (v1).",
+)
 def schedule_routes():
     return service.schedule_routes()
