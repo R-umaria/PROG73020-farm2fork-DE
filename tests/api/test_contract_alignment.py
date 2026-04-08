@@ -110,4 +110,5 @@ def test_tracking_v1_response_shape(monkeypatch):
         "order_id": 1001,
         "delivery_status": "scheduled",
         "delivery_execution_id": str(delivery_execution_id),
+        "status_history": [],
     }

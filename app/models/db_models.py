@@ -225,3 +225,17 @@ class PickupRecord(Base):
     collected_by = Column(String, nullable=True)
 
     delivery_execution = relationship("DeliveryExecution", back_populates="pickup_records")
+
+
+class InternalEventRecord(Base):
+    """Lightweight internal outbox placeholder for future event publishing."""
+
+    __tablename__ = "internal_event_record"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    aggregate_type = Column(String, nullable=False)
+    aggregate_id = Column(UUID(as_uuid=True), nullable=False)
+    order_id = Column(BigInteger, nullable=True, index=True)
+    event_type = Column(String, nullable=False)
+    event_payload = Column(JSON, nullable=False)
+    occurred_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
