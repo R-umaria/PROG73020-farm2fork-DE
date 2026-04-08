@@ -1,3 +1,5 @@
+from app.repositories.driver_repository import DriverRepository
+
 class DriverService:
     # MOCK IMPLEMENTATION - In a real application, this would interact with a database or external API
     def list_drivers(self):
