@@ -9,43 +9,36 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: farm2fork
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U postgres"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-    env:
-      DATABASE_URL: postgresql://postgres:password@localhost:5432/farm2fork
-
     steps:
+      # 1. Checkout the code
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Wait for DB
+      # 2. Install Docker Compose (needed on Ubuntu runners)
+      - name: Install Docker Compose
         run: |
-          echo "Waiting for Postgres to be ready..."
-          until pg_isready -h localhost -p 5432 -U postgres; do
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
+
+      # 3. Build and start Docker Compose services in detached mode
+      - name: Build and start containers
+        run: docker-compose up -d --build
+
+      # 4. Wait for Postgres to be ready
+      - name: Wait for Postgres
+        run: |
+          echo "Waiting for Postgres..."
+          until docker-compose exec -T db pg_isready -U postgres; do
             sleep 2
           done
 
+      # 5. Run Alembic migrations inside the app container
       - name: Run Alembic migrations
-        run: alembic -c alembic.ini upgrade head
+        run: docker-compose exec -T app alembic -c /app/alembic.ini upgrade head
 
+      # 6. Run tests inside the app container
       - name: Run tests
-        run: pytest
+        run: docker-compose exec -T app pytest
+
+      # 7. Tear down containers after the job
+      - name: Stop and remove containers
+        run: docker-compose down
