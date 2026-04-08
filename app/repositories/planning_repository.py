@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.db_models import (
+    DeliveryRequest,
     DriverAssignment,
     RouteGroup,
     RouteStop,
@@ -14,6 +15,18 @@ from app.models.db_models import (
 class PlanningRepository:
     def __init__(self, db: Session):
         self.db = db
+
+    def list_backlog_requests(self) -> list[DeliveryRequest]:
+        return (
+            self.db.query(DeliveryRequest)
+            .options(
+                selectinload(DeliveryRequest.customer_details),
+                selectinload(DeliveryRequest.request_snapshot),
+                selectinload(DeliveryRequest.route_stops),
+            )
+            .order_by(DeliveryRequest.request_timestamp.asc(), DeliveryRequest.order_id.asc())
+            .all()
+        )
 
     def create_route_group(
         self,
