@@ -1,0 +1,153 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* Farm2Fork Color Palette */
+:root {
+  /* Brand Colors */
+  --evergreen: #17301c;
+  --muted-teal: #83b692;
+  --midnight-violet: #310a31;
+  --thistle: #d6c3c9;
+  --twilight-indigo: #414066;
+
+  /* Semantic Tokens */
+  --background: #fafafa;
+  --foreground: #17301c;
+  --card: #ffffff;
+  --card-foreground: #17301c;
+  --popover: #ffffff;
+  --popover-foreground: #17301c;
+  --primary: #83b692;
+  --primary-foreground: #17301c;
+  --secondary: #414066;
+  --secondary-foreground: #ffffff;
+  --muted: #d6c3c9;
+  --muted-foreground: #414066;
+  --accent: #310a31;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e5e0e2;
+  --input: #e5e0e2;
+  --ring: #83b692;
+  --success: #83b692;
+  --success-foreground: #17301c;
+  --warning: #f59e0b;
+  --warning-foreground: #17301c;
+  --chart-1: #83b692;
+  --chart-2: #414066;
+  --chart-3: #310a31;
+  --chart-4: #d6c3c9;
+  --chart-5: #17301c;
+  --radius: 0.75rem;
+  --sidebar: #17301c;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #83b692;
+  --sidebar-primary-foreground: #17301c;
+  --sidebar-accent: #310a31;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #2a4a32;
+  --sidebar-ring: #83b692;
+}
+
+.dark {
+  --background: #0f1a12;
+  --foreground: #f5f5f5;
+  --card: #17301c;
+  --card-foreground: #f5f5f5;
+  --popover: #17301c;
+  --popover-foreground: #f5f5f5;
+  --primary: #83b692;
+  --primary-foreground: #17301c;
+  --secondary: #414066;
+  --secondary-foreground: #f5f5f5;
+  --muted: #2a4a32;
+  --muted-foreground: #d6c3c9;
+  --accent: #310a31;
+  --accent-foreground: #f5f5f5;
+  --destructive: #dc2626;
+  --destructive-foreground: #f5f5f5;
+  --border: #2a4a32;
+  --input: #2a4a32;
+  --ring: #83b692;
+  --sidebar: #0f1a12;
+  --sidebar-foreground: #f5f5f5;
+  --sidebar-primary: #83b692;
+  --sidebar-primary-foreground: #17301c;
+  --sidebar-accent: #2a4a32;
+  --sidebar-accent-foreground: #f5f5f5;
+  --sidebar-border: #2a4a32;
+  --sidebar-ring: #83b692;
+}
+
+@theme inline {
+  --font-sans: 'Inter', 'Geist', 'Geist Fallback', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback', monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  /* Custom brand colors */
+  --color-evergreen: var(--evergreen);
+  --color-muted-teal: var(--muted-teal);
+  --color-midnight-violet: var(--midnight-violet);
+  --color-thistle: var(--thistle);
+  --color-twilight-indigo: var(--twilight-indigo);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom utility classes for Farm2Fork */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+}

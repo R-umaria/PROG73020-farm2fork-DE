@@ -1,12 +1,22 @@
 from app.repositories.driver_repository import DriverRepository
 
 class DriverService:
-    def __init__(self):
-        # Initialize the repository first
-        self.repo = DriverRepository()
-
+    # MOCK IMPLEMENTATION - In a real application, this would interact with a database or external API
     def list_drivers(self):
-        return self.repo.list_all()
+        return [
+            {
+                "id": 1,
+                "name": "Alex Carter",
+                "vehicle_type": "Van",
+                "status": "available",
+            },
+            {
+                "id": 2,
+                "name": "Priya Singh",
+                "vehicle_type": "Truck",
+                "status": "on_route",
+            },
+        ]
 
     def get_todays_schedule(self, driver_id: int):
         return {
