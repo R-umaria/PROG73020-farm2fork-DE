@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from app.services.driver_service import DriverService
+from app.schemas.driver import DriverResponse
 
 router = APIRouter()
 service = DriverService()
@@ -15,3 +16,7 @@ def start_day(driver_id: int):
 @router.post("/stops/{route_stop_id}/complete")
 def complete_stop(route_stop_id: int):
     return service.complete_stop(route_stop_id)
+
+@router.get("/", response_model=list[DriverResponse])
+def list_drivers():
+    return service.list_drivers()
