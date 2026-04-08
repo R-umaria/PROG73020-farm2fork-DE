@@ -20,6 +20,10 @@ class FailDeliveryRequest(BaseModel):
     description: str
     retry_allowed: bool = False
 
+class CompletePickupRequest(BaseModel):
+    location: str | None = None
+    collected_by: str | None = None
+
 
 #delivery actions routes (/start, /complete, /fail)
 
@@ -54,3 +58,19 @@ def fail_delivery(delivery_execution_id: UUID, payload: FailDeliveryRequest):
     if not result:
         raise HTTPException(status_code=404, detail="Delivery execution not found")
     return {"exception_type": result.exception_type, "retry_allowed": result.retry_allowed}
+
+@router.post("/pickups/{delivery_execution_id}/complete")
+def complete_pickup(delivery_execution_id: UUID, payload: CompletePickupRequest):
+    result = service.complete_pickup(
+        delivery_execution_id=delivery_execution_id,
+        location=payload.location,
+        collected_by=payload.collected_by,
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Delivery execution not found")
+    return {
+        "picked_up": True,
+        "pickup_record_id": str(result.id),
+        "collected_by": result.collected_by,
+        "location": result.location,
+    }

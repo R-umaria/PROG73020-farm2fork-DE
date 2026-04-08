@@ -20,3 +20,7 @@ def complete_stop(route_stop_id: int):
 @router.get("/", response_model=list[DriverResponse])
 def list_drivers():
     return service.list_drivers()
+
+@router.get("/{driver_id}/schedule")
+def get_driver_schedule(driver_id: int):
+    return service.get_schedule(driver_id)

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.db_models import (
     DriverAssignment,
     RouteGroup,
     RouteStop,
+    DeliveryRequest,
+    CustomerDetails,
 )
 
 
@@ -84,3 +86,20 @@ class PlanningRepository:
             .filter(RouteGroup.id == route_group_id)
             .first()
         )
+    def get_driver_schedule(self, driver_id: int):
+        assignments = (
+            self.db.query(DriverAssignment)
+            .options(
+                joinedload(DriverAssignment.route_group)
+                .joinedload(RouteGroup.stops)
+                .joinedload(RouteStop.delivery_request)
+                .joinedload(DeliveryRequest.customer_details)
+            )
+            .filter(DriverAssignment.driver_id == driver_id)
+            .all()
+        )
+
+        return assignments
+
+    
+    

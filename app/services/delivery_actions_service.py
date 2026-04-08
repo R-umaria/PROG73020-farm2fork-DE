@@ -1,4 +1,5 @@
 from uuid import UUID
+from app.models import execution
 from app.repositories.execution_repository import ExecutionRepository
 from app.core.database import SessionLocal
 
@@ -40,4 +41,24 @@ class DeliveryActionsService:
             exception_type=exception_type,
             description=description,
             retry_allowed=retry_allowed,
+        )
+    def complete_pickup(
+        self,
+        delivery_execution_id: UUID,
+        location: str | None = None,
+        collected_by: str | None = None,
+    ):
+        execution = self.repo.update_status(
+            delivery_execution_id=delivery_execution_id,
+            new_status="Picked Up",
+            changed_by="pickup_desk",
+            reason="Pickup completed",
+        )
+        if not execution:
+            return None
+
+        return self.repo.create_pickup_record(
+            delivery_execution_id=delivery_execution_id,
+            location=location,
+            collected_by=collected_by,
         )
