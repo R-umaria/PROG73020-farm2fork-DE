@@ -2,12 +2,21 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response, status
 
+from app.integrations.errors import (
+    UpstreamBadResponseError,
+    UpstreamNotFoundError,
+    UpstreamTimeoutError,
+)
 from app.schemas.intake import (
     CustomerSyncResponse,
     DeliveryRequestCreate,
     IntakeResponse,
 )
-from app.services.intake_service import IntakeConflictError, IntakeService
+from app.services.intake_service import (
+    DeliveryRequestNotFoundError,
+    IntakeConflictError,
+    IntakeService,
+)
 
 router = APIRouter()
 service = IntakeService()
@@ -41,8 +50,22 @@ def create_delivery_request(payload: DeliveryRequestCreate, response: Response):
 @router.post(
     "/{delivery_request_id}/customer-sync",
     response_model=CustomerSyncResponse,
-    summary="Trigger customer sync placeholder (v1)",
-    response_description="Placeholder response for customer data sync linked to a delivery request (v1).",
+    responses={
+        404: {"description": "The delivery request or upstream customer record was not found (v1)."},
+        502: {"description": "An upstream dependency returned an invalid or unusable response (v1)."},
+        504: {"description": "An upstream dependency timed out during customer sync (v1)."},
+    },
+    summary="Fetch customer details and geocode the address (v1)",
+    response_description="Customer enrichment and geocode snapshot saved against the delivery request (v1).",
 )
 def sync_customer_details(delivery_request_id: UUID):
-    return service.sync_customer_details(delivery_request_id)
+    try:
+        return service.sync_customer_details(delivery_request_id)
+    except DeliveryRequestNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except UpstreamNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except UpstreamTimeoutError as exc:
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
+    except UpstreamBadResponseError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc

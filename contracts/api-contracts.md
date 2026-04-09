@@ -61,16 +61,46 @@ Notes:
 - `request_timestamp` must include a timezone offset.
 
 ### `POST /api/delivery-requests/{delivery_request_id}/customer-sync`
-Placeholder contract for customer data sync linked to an existing delivery request record.
+Loads an existing delivery request, fetches customer details from Customer & Subscriptions, geocodes the address, and saves the enrichment snapshot to Delivery Execution.
 
-Response body:
+Success response (`200 OK`):
 ```json
 {
-  "message": "Customer details sync placeholder",
+  "message": "Customer details synced (v1)",
   "delivery_request_id": "2ec537a9-8b7e-4fe9-981a-823f670f12d0",
-  "sync_status": "placeholder"
+  "sync_status": "completed"
 }
 ```
+
+Error responses:
+- `404 Not Found` when the delivery request does not exist or the upstream customer record cannot be found.
+- `502 Bad Gateway` when the customer or geocoding dependency returns an invalid response payload.
+- `504 Gateway Timeout` when the customer or geocoding dependency times out.
+
+Notes:
+- Customer sync persists both a flattened `CustomerDetails` record and a raw `CustomerDetailsSnapshot` payload.
+- The current customer adapter expects an upstream payload shaped like:
+  ```json
+  {
+    "customer_id": 501,
+    "customer_name": "Jane Doe",
+    "phone_number": "555-0101",
+    "address": {
+      "street": "123 Market Street",
+      "city": "Toronto",
+      "province": "ON",
+      "postal_code": "M5V 1A1",
+      "country": "CA"
+    }
+  }
+  ```
+- The current geocoding adapter expects an upstream payload shaped like:
+  ```json
+  {
+    "latitude": 43.6532,
+    "longitude": -79.3832
+  }
+  ```
 
 ## Manual/non-primary delivery record route (v1)
 ### `POST /api/deliveries/`
