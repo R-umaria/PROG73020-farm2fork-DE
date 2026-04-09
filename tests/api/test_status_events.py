@@ -14,6 +14,12 @@ from app.services.delivery_actions_service import DeliveryActionsService
 from app.services.planning_service import PlanningService
 from app.services.tracking_service import TrackingService
 
+def _clear_persisted_rows() -> None:
+    """Delete test data without dropping the shared migrated schema."""
+    with engine.begin() as connection:
+        for table in reversed(Base.metadata.sorted_tables):
+            connection.execute(table.delete())
+
 
 @pytest.fixture(autouse=True)
 def reset_event_db_state():
@@ -25,8 +31,7 @@ def reset_event_db_state():
         except Exception:
             pass
 
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    _clear_persisted_rows()
     planning.service = PlanningService(SessionLocal())
     tracking.service = TrackingService(SessionLocal())
     delivery_actions.service = DeliveryActionsService(SessionLocal())
@@ -38,7 +43,7 @@ def reset_event_db_state():
             service.close()
         except Exception:
             pass
-    Base.metadata.drop_all(bind=engine)
+    _clear_persisted_rows()
 
 
 def _seed_delivery_request(order_id: int, customer_id: int):
