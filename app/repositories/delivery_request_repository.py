@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.db_models import (
     DeliveryItem,
@@ -64,6 +64,10 @@ class DeliveryRequestRepository:
     def get_by_order_id(self, order_id: int) -> DeliveryRequest | None:
         return (
             self.db.query(DeliveryRequest)
+            .options(
+                selectinload(DeliveryRequest.items),
+                selectinload(DeliveryRequest.request_snapshot),
+            )
             .filter(DeliveryRequest.order_id == order_id)
             .first()
         )
