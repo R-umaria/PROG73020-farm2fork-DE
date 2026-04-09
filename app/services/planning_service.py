@@ -8,6 +8,8 @@ from typing import Literal
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.core.delivery_status import INITIAL_DELIVERY_EXECUTION_STATUS
+from app.repositories.execution_repository import ExecutionRepository
 from app.repositories.planning_repository import PlanningRepository
 from app.schemas.planning import (
     BacklogPlanningCandidate,
@@ -33,6 +35,7 @@ class PlanningService:
     ):
         self.db: Session = db or SessionLocal()
         self.repo = PlanningRepository(self.db)
+        self.execution_repo = ExecutionRepository(self.db)
         self.driver_assignment_policy = driver_assignment_policy or DriverAssignmentPolicy()
 
     def geocode_pending_requests(self):
@@ -163,6 +166,17 @@ class PlanningService:
                     assignment_status=assignment.assignment_status,
                     current_load_before_assignment=selected_driver.current_load,
                 )
+
+            # Scheduling is the explicit point where an execution enters the canonical
+            # `scheduled` state, so we create that execution record once the route,
+            # stops, and any initial assignment already exist.
+            for candidate in planning_group.candidates:
+                existing_execution = self.execution_repo.get_by_delivery_request_id(candidate.delivery_request_id)
+                if existing_execution is None:
+                    self.execution_repo.create_execution(
+                        delivery_request_id=candidate.delivery_request_id,
+                        current_status=INITIAL_DELIVERY_EXECUTION_STATUS,
+                    )
 
             scheduled_groups.append(
                 ScheduledRouteGroup(

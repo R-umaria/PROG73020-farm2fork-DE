@@ -213,6 +213,60 @@ Driver assignment rules:
 - Ties are broken deterministically by `driver_id`, then driver name.
 - If no available driver exists, the route group is still created and returned without a `driver_assignment`.
 
+## Tracking status contract (v1)
+### `GET /api/delivery-status/{order_id}`
+Returns the persisted delivery execution read model for a scheduled or active order.
+
+Success response (`200 OK`):
+```json
+{
+  "order_id": 1001,
+  "customer_id": 501,
+  "delivery_request_id": "3f157fb6-140f-4c25-a2e7-42daf4f35e13",
+  "delivery_execution_id": "2ec537a9-8b7e-4fe9-981a-823f670f12d0",
+  "delivery_status": "out_for_delivery",
+  "latest_status_at": "2026-04-08T13:00:00Z",
+  "latest_status_reason": "Driver started route",
+  "route_group_id": "14bfdc2d-cf59-4fb1-bd59-7a89e1116af0",
+  "route_group_status": "scheduled",
+  "route_stop_id": "1a17d827-4e53-4b15-b90d-2df0b57fa0c5",
+  "stop_sequence": 1,
+  "stop_status": "planned",
+  "estimated_arrival": "2026-04-08T12:30:00Z",
+  "assigned_driver_id": 2,
+  "assignment_status": "assigned",
+  "dispatched_at": "2026-04-08T13:00:00Z",
+  "out_for_delivery_at": "2026-04-08T13:00:00Z",
+  "status_history": [
+    {
+      "status": "scheduled",
+      "changed_at": "2026-04-08T12:30:00Z",
+      "changed_by": "system",
+      "reason": "Initial execution record created"
+    },
+    {
+      "status": "out_for_delivery",
+      "changed_at": "2026-04-08T13:00:00Z",
+      "changed_by": "driver",
+      "reason": "Driver started route"
+    }
+  ]
+}
+```
+
+Not found response (`404 Not Found`):
+```json
+{
+  "detail": "Tracked delivery status not found for order_id 1001"
+}
+```
+
+Notes:
+- The tracking source of truth is the persisted `DeliveryExecution` aggregate plus `StatusHistory` timeline.
+- Orders without a created execution record are not yet trackable and return `404`.
+- Scheduling creates the initial `scheduled` execution record; later execution actions append history entries and internal event records.
+- `route_group_id`, `route_stop_id`, `estimated_arrival`, and `assigned_driver_id` are included when planning data already exists.
+
 ## Driver roster and driver portal contracts (v1)
 ### Upstream Driver Service roster dependency
 The current adapter expects the upstream Driver Service roster payload to be either a bare array or an envelope with a `drivers` field using this shape:
@@ -353,20 +407,6 @@ Returns a list of `DeliveryRequest` records using the same response shape as abo
 
 ### `GET /api/deliveries/{delivery_id}`
 Returns one `DeliveryRequest` record by UUID.
-
-## Tracking contract (v1)
-### `GET /api/delivery-status/{order_id}`
-Returns delivery execution status by numeric `order_id`.
-
-Response body:
-```json
-{
-  "order_id": 1001,
-  "delivery_status": "scheduled"
-}
-```
-
-`delivery_execution_id` may be included when the lookup path is backed by persisted execution records.
 
 ## Delivery action endpoints
 ### `POST /api/deliveries/{delivery_execution_id}/start`

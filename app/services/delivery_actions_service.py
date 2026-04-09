@@ -1,4 +1,10 @@
+"""Execution action service used by driver and operational APIs."""
+
+from __future__ import annotations
+
 from uuid import UUID
+
+from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.core.delivery_status import DeliveryExecutionStatus
@@ -6,8 +12,10 @@ from app.repositories.execution_repository import ExecutionRepository
 
 
 class DeliveryActionsService:
-    def __init__(self):
-        self.db = SessionLocal()
+    """Applies explicit execution transitions backed by the execution repository."""
+
+    def __init__(self, db: Session | None = None):
+        self.db: Session = db or SessionLocal()
         self.repo = ExecutionRepository(self.db)
 
     def start_delivery(self, delivery_execution_id: UUID):
@@ -61,3 +69,6 @@ class DeliveryActionsService:
             description=description,
             retry_allowed=retry_allowed,
         )
+
+    def close(self) -> None:
+        self.db.close()
