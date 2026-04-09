@@ -31,6 +31,18 @@ PAYLOAD = {
 import pytest
 
 
+def _clear_persisted_rows() -> None:
+    """Delete test data without dropping the shared schema.
+
+    CI runs Alembic migrations once before the test suite. These tests should only
+    clear rows they create; dropping tables here breaks later integration tests
+    that rely on the migrated schema still existing.
+    """
+    with engine.begin() as connection:
+        for table in reversed(Base.metadata.sorted_tables):
+            connection.execute(table.delete())
+
+
 @pytest.fixture(autouse=True)
 def reset_intake_db_state():
     try:
@@ -38,14 +50,13 @@ def reset_intake_db_state():
     except Exception:
         pass
 
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    _clear_persisted_rows()
     intake.service = IntakeService(SessionLocal())
 
     yield
 
     intake.service.close()
-    Base.metadata.drop_all(bind=engine)
+    _clear_persisted_rows()
 
 
 def test_first_create_persists_delivery_request_snapshot_and_items():

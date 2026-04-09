@@ -29,8 +29,19 @@ jobs:
             sleep 2
           done
 
+      - name: Show Alembic revision state
+        run: |
+          docker compose exec -T app alembic -c /app/alembic.ini current
+          docker compose exec -T app alembic -c /app/alembic.ini heads
+
       - name: Run Alembic migrations
         run: docker compose exec -T app alembic -c /app/alembic.ini upgrade head
+
+      - name: Verify required tables exist after migration
+        run: |
+          docker compose exec -T db psql -U postgres -d farm2fork -c "\dt"
+          table_count=$(docker compose exec -T db psql -U postgres -d farm2fork -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('delivery_request', 'delivery_item', 'delivery_request_snapshot');")
+          test "$table_count" = "3"
 
       - name: Run tests inside app container
         run: docker compose exec -T app pytest -q --tb=short
