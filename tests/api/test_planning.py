@@ -214,3 +214,98 @@ def test_group_backlog_groups_by_postal_prefix_then_city_province_and_separates_
         1005: "missing_customer_enrichment",
         1006: "already_grouped",
     }
+
+
+
+def test_schedule_routes_creates_route_groups_with_deterministic_stop_sequence_and_assignment():
+    db = SessionLocal()
+    try:
+        request_repo = DeliveryRequestRepository(db)
+        customer_repo = CustomerRepository(db)
+        planning_repo = PlanningRepository(db)
+
+        first_delivery = _seed_delivery_request(
+            order_id=1001,
+            customer_id=501,
+            customer_repo=customer_repo,
+            request_repo=request_repo,
+            city="Toronto",
+            province="ON",
+            postal_code="M5V 1A1",
+        )
+        second_delivery = _seed_delivery_request(
+            order_id=1002,
+            customer_id=502,
+            customer_repo=customer_repo,
+            request_repo=request_repo,
+            city="Toronto",
+            province="ON",
+            postal_code="m5v2b2",
+        )
+        _seed_delivery_request(
+            order_id=1003,
+            customer_id=503,
+            customer_repo=customer_repo,
+            request_repo=request_repo,
+            city="Ottawa",
+            province="ON",
+            postal_code="",
+        )
+
+        existing_group = planning_repo.create_route_group(
+            name="Existing assigned group",
+            scheduled_date=datetime(2026, 4, 8, 8, 0, tzinfo=timezone.utc),
+            status="scheduled",
+            zone_code="postal_prefix:M4B",
+            total_stops=1,
+        )
+        planning_repo.assign_driver(
+            route_group_id=existing_group.id,
+            driver_id=1,
+            assignment_status="assigned",
+        )
+    finally:
+        db.close()
+
+    response = client.post("/api/planning/schedule")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["message"] == "Route groups scheduled deterministically (v1)"
+    assert body["scheduled_group_count"] == 2
+    assert body["assigned_group_count"] == 2
+    assert body["unassigned_group_count"] == 0
+
+    route_groups_by_key = {group["group_key"]: group for group in body["route_groups"]}
+    assert set(route_groups_by_key) == {
+        "delivery:city_province:OTTAWA:ON",
+        "delivery:postal_prefix:M5V",
+    }
+
+    ottawa_group = route_groups_by_key["delivery:city_province:OTTAWA:ON"]
+    assert ottawa_group["driver_assignment"]["driver_id"] == 2
+    assert ottawa_group["driver_assignment"]["current_load_before_assignment"] == 0
+    assert ottawa_group["total_stops"] == 1
+    assert ottawa_group["stops"][0]["sequence"] == 1
+    assert ottawa_group["stops"][0]["order_id"] == 1003
+
+    postal_group = route_groups_by_key["delivery:postal_prefix:M5V"]
+    assert postal_group["driver_assignment"]["driver_id"] == 1
+    assert postal_group["driver_assignment"]["current_load_before_assignment"] == 1
+    assert postal_group["route_group_status"] == "scheduled"
+    assert postal_group["zone_code"] == "postal_prefix:M5V"
+    assert [stop["sequence"] for stop in postal_group["stops"]] == [1, 2]
+    assert [stop["order_id"] for stop in postal_group["stops"]] == [1001, 1002]
+    assert [stop["delivery_request_id"] for stop in postal_group["stops"]] == [
+        first_delivery["id"],
+        second_delivery["id"],
+    ]
+
+    db = SessionLocal()
+    try:
+        persisted_groups = planning_repo = PlanningRepository(db).list_route_groups()
+        created_groups = [group for group in persisted_groups if group.name.startswith("route-group:")]
+        assert len(created_groups) == 2
+        assert sum(group.total_stops for group in created_groups) == 3
+    finally:
+        db.close()

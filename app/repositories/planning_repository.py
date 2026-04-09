@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.db_models import (
@@ -94,6 +96,35 @@ class PlanningRepository:
     def get_route_group_by_id(self, route_group_id: UUID) -> RouteGroup | None:
         return (
             self.db.query(RouteGroup)
+            .options(
+                selectinload(RouteGroup.stops),
+                selectinload(RouteGroup.driver_assignments),
+            )
             .filter(RouteGroup.id == route_group_id)
             .first()
         )
+
+    def list_route_groups(self) -> list[RouteGroup]:
+        return (
+            self.db.query(RouteGroup)
+            .options(
+                selectinload(RouteGroup.stops),
+                selectinload(RouteGroup.driver_assignments),
+            )
+            .order_by(RouteGroup.scheduled_date.asc(), RouteGroup.name.asc())
+            .all()
+        )
+
+    def get_active_driver_loads(self) -> dict[int, int]:
+        rows: Iterable[tuple[int, int]] = (
+            self.db.query(
+                DriverAssignment.driver_id,
+                func.count(DriverAssignment.id),
+            )
+            .join(RouteGroup, RouteGroup.id == DriverAssignment.route_group_id)
+            .filter(DriverAssignment.assignment_status.in_(["assigned", "accepted"]))
+            .filter(RouteGroup.status.in_(["draft", "scheduled", "in_progress"]))
+            .group_by(DriverAssignment.driver_id)
+            .all()
+        )
+        return {driver_id: load_count for driver_id, load_count in rows}

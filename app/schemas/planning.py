@@ -52,5 +52,51 @@ class GroupBacklogResponse(BaseModel):
     skipped_requests: list[BacklogPlanningSkip]
 
 
+class ScheduledDriverAssignment(BaseModel):
+    model_config = ConfigDict(title="ScheduledDriverAssignmentV1")
+
+    driver_id: int
+    driver_name: str
+    vehicle_type: str
+    assignment_status: str
+    current_load_before_assignment: int
+
+
+class ScheduledRouteStop(BaseModel):
+    model_config = ConfigDict(title="ScheduledRouteStopV1")
+
+    route_stop_id: UUID
+    delivery_request_id: UUID
+    order_id: int
+    sequence: int
+    stop_status: str
+    estimated_arrival: datetime | None = None
+
+
+class ScheduledRouteGroup(BaseModel):
+    model_config = ConfigDict(title="ScheduledRouteGroupV1")
+
+    route_group_id: UUID
+    group_key: str
+    route_group_name: str
+    handling_type: Literal["delivery", "pickup"]
+    zone_code: str
+    scheduled_date: datetime
+    route_group_status: str
+    total_stops: int
+    driver_assignment: ScheduledDriverAssignment | None = None
+    stops: list[ScheduledRouteStop]
+
+
+class ScheduleRoutesResponse(BaseModel):
+    model_config = ConfigDict(title="ScheduleRoutesResponseV1")
+
+    message: str
+    scheduled_group_count: int
+    assigned_group_count: int
+    unassigned_group_count: int
+    route_groups: list[ScheduledRouteGroup]
+
+
 class PlanningResponse(BaseModel):
     message: str
