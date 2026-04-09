@@ -16,17 +16,22 @@ from app.schemas.driver import DriverSummaryResponse
 from app.services.driver_service import DriverService
 from tests.conftest import client
 
-
+def _clear_persisted_rows() -> None:
+    """Delete test data without dropping the shared migrated schema."""
+    with engine.begin() as connection:
+        for table in reversed(Base.metadata.sorted_tables):
+            connection.execute(table.delete())
+            
 @pytest.fixture(autouse=True)
 def reset_driver_contract_state():
     for route_module in (driver, drivers):
         try:
             route_module.service.close()
         except Exception:
+
             pass
 
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    _clear_persisted_rows()
     driver.service = DriverService(SessionLocal())
     drivers.service = DriverService(SessionLocal())
 
@@ -34,7 +39,7 @@ def reset_driver_contract_state():
 
     for route_module in (driver, drivers):
         route_module.service.close()
-    Base.metadata.drop_all(bind=engine)
+    _clear_persisted_rows()
 
 
 def _seed_assigned_route_stop(*, driver_id: int = 2) -> UUID:
