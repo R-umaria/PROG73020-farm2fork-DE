@@ -102,6 +102,61 @@ Notes:
   }
   ```
 
+## Planning backlog grouping contract (v1)
+### `POST /api/planning/group-backlog`
+Groups eligible delivery backlog deterministically for later scheduling. This endpoint does **not** create routes or assignments yet.
+
+Success response (`200 OK`):
+```json
+{
+  "message": "Backlog grouped deterministically (v1)",
+  "total_groups": 3,
+  "total_candidates": 4,
+  "skipped_count": 2,
+  "groups": [
+    {
+      "group_key": "delivery:postal_prefix:M5V",
+      "handling_type": "delivery",
+      "region_key": "postal_prefix:M5V",
+      "region_source": "postal_prefix",
+      "request_count": 2,
+      "candidates": [
+        {
+          "delivery_request_id": "2ec537a9-8b7e-4fe9-981a-823f670f12d0",
+          "order_id": 1001,
+          "customer_id": 501,
+          "handling_type": "delivery",
+          "region_key": "postal_prefix:M5V",
+          "region_source": "postal_prefix",
+          "postal_prefix": "M5V",
+          "city": "Toronto",
+          "province": "ON",
+          "request_timestamp": "2026-04-08T12:30:00Z"
+        }
+      ]
+    }
+  ],
+  "skipped_requests": [
+    {
+      "delivery_request_id": "1a17d827-4e53-4b15-b90d-2df0b57fa0c5",
+      "order_id": 1005,
+      "reason": "missing_customer_enrichment"
+    }
+  ]
+}
+```
+
+Eligibility rules:
+- A request must not already be attached to a `RouteStop`.
+- A request must have customer enrichment with non-empty street, city, province, and country fields.
+- Region derivation uses postal prefix first. If no usable postal prefix exists, it falls back to normalized `city + province`.
+- The grouping key includes handling type, so pickup requests stay separate from delivery requests when `order_type` is present in the intake snapshot.
+
+Determinism rules:
+- Group keys are sorted lexicographically.
+- Candidates inside each group are sorted by `request_timestamp`, then `order_id`, then `delivery_request_id`.
+- Postal prefixes are normalized by removing spaces/punctuation and taking the first three alphanumeric characters.
+
 ## Manual/non-primary delivery record route (v1)
 ### `POST /api/deliveries/`
 Non-primary manual creation path. This persists a `DeliveryRequest` record using the same v1 payload shape as intake, but it is not the canonical idempotent intake path.
