@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify
 import subprocess
 import logging
 import time
@@ -7,8 +7,9 @@ import requests
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
-APP_HEALTH_URL = "http://localhost:8000/health"  # your app container port
-APP_VERSION_URL = "http://localhost:8000/version"
+APP_HEALTH_URL = "http://localhost:8000/api/health"
+APP_VERSION_URL = "http://localhost:8000/api/version"
+REQUEST_TIMEOUT_SECONDS = 5
 
 def run_command(command):
     """Run a system command and log its output."""
@@ -30,7 +31,7 @@ def wait_for_app_health(timeout=30):
     logging.info("⏳ Waiting for app to be healthy...")
     for i in range(timeout):
         try:
-            r = requests.get(APP_HEALTH_URL)
+            r = requests.get(APP_HEALTH_URL, timeout=REQUEST_TIMEOUT_SECONDS)
             if r.status_code == 200 and r.json().get("status") == "ok":
                 logging.info(f"✅ App health OK: {r.json()}")
                 return True
@@ -43,7 +44,7 @@ def wait_for_app_health(timeout=30):
 def check_app_version():
     """Check version endpoint"""
     try:
-        r = requests.get(APP_VERSION_URL)
+        r = requests.get(APP_VERSION_URL, timeout=REQUEST_TIMEOUT_SECONDS)
         if r.status_code == 200:
             logging.info(f"App version: {r.json().get('version')}")
             return True
@@ -56,20 +57,20 @@ def webhook():
     logging.info("🚀 Webhook received. Starting CI/CD pipeline...")
 
     # 1. Stop old containers
-    run_command(["docker-compose", "down"])
+    run_command(["docker", "compose", "down"])
 
     # 2. Build containers
-    if not run_command(["docker-compose", "build"]):
+    if not run_command(["docker", "compose", "build"]):
         return jsonify({"status": "Build failed"}), 500
 
     # 3. Start DB only
     logging.info("Starting DB container...")
-    run_command(["docker-compose", "up", "-d", "db"])
+    run_command(["docker", "compose", "up", "-d", "db"])
     time.sleep(10)  # wait a bit for DB to be ready
 
     # 4. Start app container
     logging.info("Starting app container...")
-    run_command(["docker-compose", "up", "-d", "app"])
+    run_command(["docker", "compose", "up", "-d", "app"])
 
     # 5. Wait for health and version
     if not wait_for_app_health():
@@ -79,21 +80,21 @@ def webhook():
 
     # 6. Run migrations
     if not run_command([
-        "docker-compose", "run", "--rm", "app",
+        "docker", "compose", "run", "--rm", "app",
         "alembic", "upgrade", "head"
     ]):
         return jsonify({"status": "Migration failed"}), 500
 
     # 7. Run unit tests
     if not run_command([
-        "docker-compose", "run", "--rm", "app",
+        "docker", "compose", "run", "--rm", "app",
         "pytest", "tests/unit"
     ]):
         logging.warning("Unit tests failed")
 
     # 8. Run integration tests
     if not run_command([
-        "docker-compose", "run", "--rm", "app",
+        "docker", "compose", "run", "--rm", "app",
         "pytest", "tests/integration"
     ]):
         logging.warning("Integration tests failed")

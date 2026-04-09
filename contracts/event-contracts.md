@@ -62,7 +62,7 @@ Current DB-backed tracking payload shape:
 - `failed`
 
 ## Event emission semantics (v1)
-The repo does not publish to Kafka/RabbitMQ/etc. yet. Instead, it persists explicit internal event records in `internal_event_record` using the payload shape below. This acts as an outbox-style placeholder so event generation points remain visible and testable.
+The repo does not publish to Kafka/RabbitMQ/etc. yet. Instead, it persists explicit internal event records in `internal_event_record` using the payload shape below. This acts as a temporary outbox-style record so event generation points remain visible and testable.
 
 Shared payload shape:
 

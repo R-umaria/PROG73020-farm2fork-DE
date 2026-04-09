@@ -1,6 +1,6 @@
 """Canonical delivery execution event names and helpers.
 
-These events are the internal placeholder/outbox records used until a real
+These events are stored as internal outbox-style records until a real
 message bus exists. They intentionally mirror upstream-facing event semantics so
 emission points remain explicit and testable.
 """
