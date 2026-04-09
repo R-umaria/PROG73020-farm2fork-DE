@@ -58,3 +58,37 @@ Then open:
 
 ## Implementation rule
 Keep business logic in `services/`, DB access in `repositories/`, external calls in `integrations/`, and HTTP handling in `api/routes/`.
+
+
+## Connected React/Next driver portal
+The separate driver portal under `frontend/driver-portal/` is now wired to the live backend APIs.
+
+### Backend setup for the connected portal
+```bash
+cp .env.example .env
+```
+
+For local demo mode without an external Driver Service, enable the explicit fallback roster:
+```bash
+DRIVER_SERVICE_ENABLE_DEV_FALLBACK=true
+```
+
+Then start the backend:
+```bash
+docker compose up --build
+```
+
+### Frontend setup
+```bash
+cd frontend/driver-portal
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+Frontend environment:
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
+The backend now allows requests from `http://localhost:3000` by default through `FRONTEND_ALLOWED_ORIGINS`.

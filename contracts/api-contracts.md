@@ -398,7 +398,19 @@ Response body:
   ],
   "request_status": "received",
   "created_at": "2026-04-08T12:30:05Z",
-  "updated_at": "2026-04-08T12:30:05Z"
+  "updated_at": "2026-04-08T12:30:05Z",
+  "customer_details": {
+    "customer_name": "Jane Doe",
+    "phone_number": "555-0101",
+    "street": "123 Market Street",
+    "city": "Toronto",
+    "province": "ON",
+    "postal_code": "M5V 1A1",
+    "country": "CA",
+    "latitude": 43.6532,
+    "longitude": -79.3832,
+    "geocode_status": "completed"
+  }
 }
 ```
 
@@ -407,6 +419,10 @@ Returns a list of `DeliveryRequest` records using the same response shape as abo
 
 ### `GET /api/deliveries/{delivery_id}`
 Returns one `DeliveryRequest` record by UUID.
+
+Notes:
+- `customer_details` is optional and appears after customer-sync enrichment has been completed.
+- The connected driver portal uses this additive field to show customer name, phone, and address details without introducing a new read endpoint.
 
 ## Delivery action endpoints
 ### `POST /api/deliveries/{delivery_execution_id}/start`
