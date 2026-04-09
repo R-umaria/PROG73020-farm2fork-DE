@@ -159,6 +159,7 @@ class PlanningService:
                     driver_id=assignment.driver_id,
                     driver_name=selected_driver.driver.name,
                     vehicle_type=selected_driver.driver.vehicle_type,
+                    driver_status=selected_driver.driver.status,
                     assignment_status=assignment.assignment_status,
                     current_load_before_assignment=selected_driver.current_load,
                 )

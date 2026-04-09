@@ -182,6 +182,7 @@ Success response (`200 OK`):
         "driver_id": 2,
         "driver_name": "Sam Patel",
         "vehicle_type": "Bike",
+        "driver_status": "available",
         "assignment_status": "assigned",
         "current_load_before_assignment": 0
       },
@@ -211,6 +212,100 @@ Driver assignment rules:
 - The default policy prefers lower current active assignment load.
 - Ties are broken deterministically by `driver_id`, then driver name.
 - If no available driver exists, the route group is still created and returned without a `driver_assignment`.
+
+## Driver roster and driver portal contracts (v1)
+### Upstream Driver Service roster dependency
+The current adapter expects the upstream Driver Service roster payload to be either a bare array or an envelope with a `drivers` field using this shape:
+
+```json
+{
+  "drivers": [
+    {
+      "driver_id": 2,
+      "driver_name": "Sam Patel",
+      "vehicle_type": "Bike",
+      "driver_status": "available"
+    }
+  ]
+}
+```
+
+Error handling:
+- `404` when the upstream roster endpoint or requested driver cannot be found.
+- `502` when the upstream payload is invalid or unusable.
+- `504` when the upstream request times out.
+
+Development fallback note:
+- A local fallback roster exists only when `driver_service_enable_dev_fallback=true` is explicitly enabled in settings.
+- Production-style paths must not silently fake driver data.
+
+### `GET /api/drivers/`
+Primary driver roster route. Returns the explicit v1 driver contract projected from Driver Service.
+
+Response body:
+```json
+[
+  {
+    "driver_id": 2,
+    "driver_name": "Sam Patel",
+    "vehicle_type": "Bike",
+    "driver_status": "available"
+  }
+]
+```
+
+### `GET /api/driver/`
+Compatibility alias for `GET /api/drivers/`. Existing consumers may continue to use it, but new consumers should prefer the plural collection path.
+
+### `GET /api/driver/schedule/today/{driver_id}`
+Returns the current local route-stop view for a driver, combined with upstream driver roster data.
+
+Response body:
+```json
+{
+  "driver_id": 2,
+  "driver_name": "Sam Patel",
+  "vehicle_type": "Bike",
+  "driver_status": "available",
+  "stops": [
+    {
+      "route_stop_id": "1a17d827-4e53-4b15-b90d-2df0b57fa0c5",
+      "route_group_id": "2ec537a9-8b7e-4fe9-981a-823f670f12d0",
+      "delivery_request_id": "3f157fb6-140f-4c25-a2e7-42daf4f35e13",
+      "order_id": 1001,
+      "sequence": 1,
+      "stop_status": "planned",
+      "estimated_arrival": "2026-04-08T12:30:00Z",
+      "address": "123 Market Street, Toronto, ON, M5V 1A1, CA"
+    }
+  ]
+}
+```
+
+### `POST /api/driver/start-day/{driver_id}`
+Lightweight acknowledgement route using the same driver field names as the roster and schedule contracts.
+
+Response body:
+```json
+{
+  "driver_id": 2,
+  "driver_name": "Sam Patel",
+  "driver_status": "available",
+  "message": "Driver day started (v1)"
+}
+```
+
+### `POST /api/driver/stops/{route_stop_id}/complete`
+Marks the local route stop record complete without changing the delivery execution status model.
+
+Response body:
+```json
+{
+  "route_stop_id": "1a17d827-4e53-4b15-b90d-2df0b57fa0c5",
+  "stop_status": "completed",
+  "message": "Route stop marked completed (v1)"
+}
+```
 
 ## Manual/non-primary delivery record route (v1)
 ### `POST /api/deliveries/`
