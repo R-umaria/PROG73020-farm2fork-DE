@@ -15,6 +15,13 @@ from app.services.planning_service import PlanningService
 from tests.conftest import client
 
 
+def _clear_persisted_rows() -> None:
+    """Delete test data without dropping the shared migrated schema."""
+    with engine.begin() as connection:
+        for table in reversed(Base.metadata.sorted_tables):
+            connection.execute(table.delete())
+
+
 @pytest.fixture(autouse=True)
 def reset_planning_db_state():
     try:
@@ -22,15 +29,13 @@ def reset_planning_db_state():
     except Exception:
         pass
 
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    _clear_persisted_rows()
     planning.service = PlanningService(SessionLocal())
 
     yield
 
     planning.service.close()
-    Base.metadata.drop_all(bind=engine)
-
+    _clear_persisted_rows()
 
 def _seed_delivery_request(
     *,
