@@ -51,6 +51,8 @@ cp .env.example .env
 docker compose up --build
 ```
 
+The root `.env` file is intentionally not committed; create it locally from `.env.example`.
+
 Then open:
 - API root: `http://localhost:8000/api/health`
 - UI: `http://localhost:8000/`

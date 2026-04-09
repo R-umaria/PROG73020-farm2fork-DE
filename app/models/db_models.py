@@ -228,7 +228,7 @@ class PickupRecord(Base):
 
 
 class InternalEventRecord(Base):
-    """Lightweight internal outbox placeholder for future event publishing."""
+    """Lightweight internal outbox-style record for future event publishing."""
 
     __tablename__ = "internal_event_record"
 

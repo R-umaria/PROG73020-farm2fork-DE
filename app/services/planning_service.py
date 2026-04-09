@@ -39,7 +39,14 @@ class PlanningService:
         self.driver_assignment_policy = driver_assignment_policy or DriverAssignmentPolicy()
 
     def geocode_pending_requests(self):
-        return {"message": "Pending addresses geocoded placeholder"}
+        """Return the current status of the legacy geocode batch hook.
+
+        Backlog enrichment now happens through the intake/customer-sync flow, so
+        this method remains a no-op status response until a dedicated batch job is
+        introduced. Keeping it explicit avoids implying hidden planning behavior.
+        """
+
+        return {"message": "Pending address geocoding is not implemented in this service path"}
 
     def group_backlog(self) -> GroupBacklogResponse:
         grouped: dict[tuple[str, str], list[BacklogPlanningCandidate]] = defaultdict(list)
