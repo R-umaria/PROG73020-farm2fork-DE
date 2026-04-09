@@ -1,195 +1,161 @@
 "use client"
 
+import { useMemo } from "react"
 import { useRouter } from "next/navigation"
+import { ChevronRight, MapPin, Navigation, Route, Truck, User } from "lucide-react"
+
 import { AppShell } from "@/components/delivery/app-shell"
+import { DeliveryCard } from "@/components/delivery/delivery-card"
 import { PageHeader } from "@/components/delivery/page-header"
 import { RouteMap } from "@/components/delivery/route-map"
-import { DeliveryCard } from "@/components/delivery/delivery-card"
+import { StatePanel } from "@/components/delivery/state-panel"
 import { Button } from "@/components/ui/button"
-import { 
-  MapPin, 
-  Clock, 
-  Truck, 
-  User,
-  Route,
-  Navigation,
-  ChevronRight
-} from "lucide-react"
-
-const routeStops = [
-  { id: "1", name: "Green Valley Farms", status: "delivered" as const },
-  { id: "2", name: "Sunrise Organic Co-op", status: "out_for_delivery" as const },
-  { id: "3", name: "The Corner Bistro", status: "scheduled" as const },
-  { id: "4", name: "Healthy Harvest Market", status: "scheduled" as const },
-  { id: "5", name: "Farm Fresh Deli", status: "scheduled" as const },
-]
-
-const deliveryDetails = [
-  {
-    id: "1",
-    stopNumber: 1,
-    customerName: "Green Valley Farms",
-    address: "1234 Rural Route 7, Riverside",
-    timeWindow: "8:00 - 9:00 AM",
-    deliveryType: "Produce Box",
-    status: "delivered" as const,
-  },
-  {
-    id: "2",
-    stopNumber: 2,
-    customerName: "Sunrise Organic Co-op",
-    address: "567 Market Street, Downtown",
-    timeWindow: "9:30 - 10:30 AM",
-    deliveryType: "Mixed Crate",
-    status: "out_for_delivery" as const,
-  },
-  {
-    id: "3",
-    stopNumber: 3,
-    customerName: "The Corner Bistro",
-    address: "890 Main Avenue, Midtown",
-    timeWindow: "11:00 AM - 12:00 PM",
-    deliveryType: "Restaurant Order",
-    status: "scheduled" as const,
-  },
-  {
-    id: "4",
-    stopNumber: 4,
-    customerName: "Healthy Harvest Market",
-    address: "234 Oak Boulevard, Westside",
-    timeWindow: "12:30 - 1:30 PM",
-    deliveryType: "Bulk Produce",
-    status: "scheduled" as const,
-  },
-  {
-    id: "5",
-    stopNumber: 5,
-    customerName: "Farm Fresh Deli",
-    address: "456 Pine Street, Eastside",
-    timeWindow: "2:00 - 3:00 PM",
-    deliveryType: "Produce Box",
-    status: "scheduled" as const,
-  },
-]
+import { Spinner } from "@/components/ui/spinner"
+import { useDriverPortalData } from "@/hooks/use-driver-portal-data"
+import { useDriverSession } from "@/hooks/use-driver-session"
+import { formatRouteLabel, formatShortTime, formatTimeWindow } from "@/lib/portal-formatters"
 
 export default function RouteOverviewPage() {
   const router = useRouter()
+  const { session, isReady } = useDriverSession({ required: true })
+  const driver = session
+    ? {
+        driver_id: session.driverId,
+        driver_name: session.driverName,
+        vehicle_type: session.vehicleType,
+        driver_status: session.driverStatus,
+      }
+    : null
+  const { data, isLoading, error, refresh } = useDriverPortalData(driver)
+
+  const routeStops = useMemo(
+    () =>
+      (data?.stops ?? []).map((stop) => ({
+        id: stop.routeStopId,
+        name: stop.customerName,
+        status: stop.deliveryStatus,
+      })),
+    [data?.stops],
+  )
+
+  if (!isReady || !session) {
+    return null
+  }
+
+  const firstStop = data?.stops[0] ?? null
+  const lastStop = data?.stops.length ? data.stops[data.stops.length - 1] : null
 
   return (
     <AppShell>
-      <PageHeader 
-        title="Route Overview"
-        subtitle="Route NE-47"
-        backHref="/dashboard"
-      />
+      <PageHeader title="Route Overview" subtitle={formatRouteLabel(firstStop?.routeGroupId)} backHref="/dashboard" />
 
       <main className="px-4 py-6 max-w-4xl mx-auto space-y-6">
-        {/* Route Map */}
-        <RouteMap stops={routeStops} className="h-[220px]" />
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Spinner className="h-8 w-8 text-[var(--muted-teal)]" />
+          </div>
+        ) : error ? (
+          <StatePanel icon={Route} title="Unable to load route data" message={error} actionLabel="Retry" onAction={() => void refresh()} />
+        ) : !data || data.stops.length === 0 ? (
+          <StatePanel icon={Route} title="No route planned yet" message="Once planning assigns route stops to this driver, the route overview will appear here." actionLabel="Refresh" onAction={() => void refresh()} />
+        ) : (
+          <>
+            <RouteMap stops={routeStops} className="h-[220px]" />
 
-        {/* Route Info Cards */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-card rounded-xl p-4 border border-border">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-[var(--muted-teal)]/10">
-                <Route className="w-5 h-5 text-[var(--muted-teal)]" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-card rounded-xl p-4 border border-border">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-[var(--muted-teal)]/10">
+                    <Route className="w-5 h-5 text-[var(--muted-teal)]" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Route ID</p>
+                    <p className="font-semibold text-foreground">{formatRouteLabel(firstStop?.routeGroupId)}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Route ID</p>
-                <p className="font-semibold text-foreground">NE-47</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-card rounded-xl p-4 border border-border">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-[var(--twilight-indigo)]/10">
-                <MapPin className="w-5 h-5 text-[var(--twilight-indigo)]" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Region</p>
-                <p className="font-semibold text-foreground">North Valley</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-card rounded-xl p-4 border border-border">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-[var(--midnight-violet)]/10">
-                <User className="w-5 h-5 text-[var(--midnight-violet)]" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Driver</p>
-                <p className="font-semibold text-foreground">Marcus Chen</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-card rounded-xl p-4 border border-border">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-[var(--thistle)]">
-                <Truck className="w-5 h-5 text-[var(--twilight-indigo)]" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Vehicle</p>
-                <p className="font-semibold text-foreground">Van #12</p>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Route Summary Stats */}
-        <div className="bg-[var(--evergreen)] rounded-2xl p-5 text-white">
-          <h3 className="text-sm font-medium text-white/70 mb-4">Route Summary</h3>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center">
-              <p className="text-3xl font-bold">5</p>
-              <p className="text-xs text-white/60 mt-1">Total Stops</p>
-            </div>
-            <div className="text-center border-x border-white/20">
-              <p className="text-3xl font-bold">42</p>
-              <p className="text-xs text-white/60 mt-1">Miles</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold">4.5</p>
-              <p className="text-xs text-white/60 mt-1">Hours Est.</p>
-            </div>
-          </div>
-        </div>
+              <div className="bg-card rounded-xl p-4 border border-border">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-[var(--twilight-indigo)]/10">
+                    <MapPin className="w-5 h-5 text-[var(--twilight-indigo)]" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">First ETA</p>
+                    <p className="font-semibold text-foreground">{formatShortTime(firstStop?.estimatedArrival)}</p>
+                  </div>
+                </div>
+              </div>
 
-        {/* Navigate to In Transit Button */}
-        <Button
-          onClick={() => router.push("/deliveries/2")}
-          className="w-full h-14 bg-[var(--muted-teal)] hover:bg-[var(--muted-teal)]/90 text-[var(--evergreen)] font-semibold text-base rounded-xl"
-        >
-          <Navigation className="w-5 h-5 mr-2" />
-          Navigate to Current Stop
-          <ChevronRight className="w-5 h-5 ml-auto" />
-        </Button>
+              <div className="bg-card rounded-xl p-4 border border-border">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-[var(--midnight-violet)]/10">
+                    <User className="w-5 h-5 text-[var(--midnight-violet)]" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Driver</p>
+                    <p className="font-semibold text-foreground">{data.driver.driver_name}</p>
+                  </div>
+                </div>
+              </div>
 
-        {/* Ordered Stop List */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Clock className="w-5 h-5 text-muted-foreground" />
-              Stop Sequence
-            </h2>
-            <span className="text-sm text-muted-foreground">
-              1 of 5 completed
-            </span>
-          </div>
+              <div className="bg-card rounded-xl p-4 border border-border">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-[var(--thistle)]">
+                    <Truck className="w-5 h-5 text-[var(--twilight-indigo)]" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Vehicle</p>
+                    <p className="font-semibold text-foreground">{data.driver.vehicle_type}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-          <div className="space-y-3">
-            {deliveryDetails.map((delivery) => (
-              <DeliveryCard
-                key={delivery.id}
-                {...delivery}
-                isActive={delivery.status === "out_for_delivery"}
-                onClick={() => router.push(`/deliveries/${delivery.id}`)}
-              />
-            ))}
-          </div>
-        </section>
+            <div className="bg-card rounded-xl p-5 border border-border">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm text-muted-foreground">Route progress</p>
+                  <p className="text-lg font-semibold text-foreground">{data.stops.filter((stop) => stop.deliveryStatus === "delivered").length} / {data.stops.length} completed</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Last ETA</p>
+                  <p className="font-semibold text-foreground">{formatShortTime(lastStop?.estimatedArrival)}</p>
+                </div>
+              </div>
+            </div>
+
+            <section>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-foreground">Planned Stops</h2>
+                <Button onClick={() => router.push(`/deliveries/${firstStop?.routeStopId}`)} className="bg-[var(--evergreen)] hover:bg-[var(--evergreen)]/90 text-white">
+                  Open Next Stop
+                  <ChevronRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {data.stops.map((stop) => (
+                  <DeliveryCard
+                    key={stop.routeStopId}
+                    stopNumber={stop.sequence}
+                    customerName={stop.customerName}
+                    address={stop.address}
+                    timeWindow={formatTimeWindow(stop.estimatedArrival, stop.sequence)}
+                    deliveryType={stop.deliveryType}
+                    status={stop.deliveryStatus}
+                    isActive={stop.deliveryStatus === "out_for_delivery"}
+                    onClick={() => router.push(`/deliveries/${stop.routeStopId}`)}
+                  />
+                ))}
+              </div>
+            </section>
+
+            <div className="flex items-center justify-center text-xs text-muted-foreground gap-2">
+              <Navigation className="w-4 h-4" />
+              Live route data is coming from the backend planning and driver APIs.
+            </div>
+          </>
+        )}
       </main>
     </AppShell>
   )

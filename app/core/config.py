@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     driver_service_drivers_path: str = "/api/drivers"
     driver_service_timeout_seconds: float = 5.0
     driver_service_enable_dev_fallback: bool = False
+    frontend_allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    @property
+    def frontend_allowed_origins_list(self) -> list[str]:
+        """Return normalized browser origins allowed to call the API directly."""
+
+        return [origin.strip() for origin in self.frontend_allowed_origins.split(",") if origin.strip()]
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

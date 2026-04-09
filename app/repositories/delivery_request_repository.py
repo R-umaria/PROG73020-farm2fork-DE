@@ -57,6 +57,10 @@ class DeliveryRequestRepository:
     def get_by_id(self, delivery_request_id: UUID) -> DeliveryRequest | None:
         return (
             self.db.query(DeliveryRequest)
+            .options(
+                selectinload(DeliveryRequest.items),
+                selectinload(DeliveryRequest.customer_details),
+            )
             .filter(DeliveryRequest.id == delivery_request_id)
             .first()
         )
@@ -73,4 +77,8 @@ class DeliveryRequestRepository:
         )
 
     def list_all(self) -> list[DeliveryRequest]:
-        return self.db.query(DeliveryRequest).all()
+        return (
+            self.db.query(DeliveryRequest)
+            .options(selectinload(DeliveryRequest.items), selectinload(DeliveryRequest.customer_details))
+            .all()
+        )

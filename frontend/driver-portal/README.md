@@ -1,88 +1,53 @@
-# Farm2Fork Delivery Execution
+# Farm2Fork Driver Portal
 
-A simple shared repo for the Delivery Execution team.
+This Next.js app is the connected driver portal for the Delivery Execution backend.
 
-## Why this structure
-This layout is organized by the real workstreams of the module:
-- **intake**: receive order data from Order Orchestration
-- **planning**: geocoding, grouping, scheduling, route planning
-- **tracking**: customer-facing delivery status lookup
-- **driver**: driver schedule, start day, complete stop, driver UI
-- **integrations**: external API clients for other teams/services
+## What is wired right now
+- backend-linked driver sign-in using the live `/api/drivers/` roster
+- browser session/local storage for the selected driver session
+- live dashboard data from `/api/driver/schedule/today/{driver_id}`
+- live delivery detail views using `/api/deliveries/{delivery_request_id}` and `/api/delivery-status/{order_id}`
+- delivery actions using:
+  - `POST /api/deliveries/{delivery_execution_id}/start`
+  - `POST /api/deliveries/{delivery_execution_id}/complete`
+  - `POST /api/deliveries/{delivery_execution_id}/fail`
+  - `POST /api/driver/stops/{route_stop_id}/complete`
 
-This keeps merge conflicts lower because teammates can mostly work in separate areas.
-
-## Repo tree
-```text
-.
-├── .github/
-│   └── workflows/
-├── adr/
-├── alembic/
-├── app/
-│   ├── api/
-│   │   └── routes/
-│   ├── core/
-│   ├── integrations/
-│   ├── models/
-│   ├── repositories/
-│   ├── schemas/
-│   └── services/
-├── contracts/
-├── driver_ui/
-│   ├── static/
-│   └── templates/
-└── tests/
-    ├── api/
-    └── services/
-```
-
-## Suggested ownership map
-- **Rishi**: `contracts/`, `adr/`, `app/api/router.py`, architecture review of cross-area changes
-- **Krishi**: `app/models/`, `app/repositories/`, `alembic/`
-- **Mihir**: `app/integrations/`, intake/tracking API contracts, integration docs
-- **Mehak + Ceren**: `.github/`, `Dockerfile`, `docker-compose.yml`, environment setup
-- **Andy**: `tests/`, CI test checks, test data and validation rules
-- **Shared implementation areas**: `app/services/`, `app/api/routes/`, `driver_ui/`
-
-## Local run
+## Local setup
+### 1) Start the backend
 ```bash
 cp .env.example .env
+```
+
+For a local demo without a separate Driver Service, enable the explicit development fallback:
+```bash
+DRIVER_SERVICE_ENABLE_DEV_FALLBACK=true
+```
+
+Then run the backend:
+```bash
 docker compose up --build
 ```
 
-Then open:
-- API root: `http://localhost:8000/api/health`
-- UI: `http://localhost:8000/`
-- Docs: `http://localhost:8000/docs`
-
-## Implementation rule
-Keep business logic in `services/`, DB access in `repositories/`, external calls in `integrations/`, and HTTP handling in `api/routes/`.
-
-
-## React + TypeScript driver frontend
-A separate React/TypeScript frontend has been added under `frontend/driver-portal/`.
-
-Why this is a good fit:
-- The backend remains Python/FastAPI and continues to own business logic, persistence, and integrations.
-- The frontend can still consume all existing endpoints over HTTP.
-- OpenStreetMap and Leaflet are frontend-friendly and can be added without changing the backend stack.
-- PostgreSQL remains backend-only, which is the correct architecture.
-
-Suggested local workflow:
+### 2) Start the driver portal
 ```bash
-# terminal 1
-cp .env.example .env
-docker compose up --build
-
-# terminal 2
 cd frontend/driver-portal
 cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-Default URLs:
+## Environment
+The frontend reads this value from `.env.local`:
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
+## URLs
 - Backend API: `http://localhost:8000`
 - Backend docs: `http://localhost:8000/docs`
-- React driver portal: `http://localhost:3000`
+- Driver portal: `http://localhost:3000`
+
+## Notes
+- The backend now allows browser calls from `http://localhost:3000` by default.
+- This portal intentionally does **not** use JWT/OAuth yet. It stores the selected driver session in browser storage for demo purposes.

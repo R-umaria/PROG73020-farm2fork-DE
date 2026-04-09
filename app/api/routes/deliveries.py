@@ -12,6 +12,7 @@ service = DeliveryService()
 @router.get(
     "/",
     response_model=list[DeliveryResponse],
+    response_model_exclude_none=True,
     summary="List delivery request records (v1)",
     response_description="Delivery request records exposed by the delivery execution service (v1).",
 )
@@ -22,6 +23,7 @@ def list_deliveries():
 @router.get(
     "/{delivery_id}",
     response_model=DeliveryResponse,
+    response_model_exclude_none=True,
     summary="Get delivery request record (v1)",
     response_description="A single delivery request record from the delivery execution service (v1).",
 )
@@ -35,6 +37,7 @@ def get_delivery(delivery_id: UUID):
 @router.post(
     "/",
     response_model=DeliveryResponse,
+    response_model_exclude_none=True,
     status_code=201,
     summary="Create delivery request record manually (v1)",
     response_description="Non-primary manual creation path for a delivery request record (v1). Prefer POST /api/delivery-requests/ for the intake contract.",
