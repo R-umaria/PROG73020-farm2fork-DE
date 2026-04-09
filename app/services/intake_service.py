@@ -7,18 +7,40 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.integrations.customer_module_client import CustomerModuleClient
+from app.integrations.errors import (
+    UpstreamBadResponseError,
+    UpstreamNotFoundError,
+    UpstreamServiceError,
+    UpstreamTimeoutError,
+)
+from app.integrations.geocoding_client import GeocodingClient
+from app.repositories.customer_repository import CustomerRepository
 from app.repositories.delivery_request_repository import DeliveryRequestRepository
-from app.schemas.intake import DeliveryRequestCreate, IntakeResponse
+from app.schemas.intake import CustomerSyncResponse, DeliveryRequestCreate, IntakeResponse
 
 
 class IntakeConflictError(ValueError):
     """Raised when the same order_id is submitted with a conflicting payload."""
 
 
+class DeliveryRequestNotFoundError(ValueError):
+    """Raised when a delivery request cannot be found for customer sync."""
+
+
 class IntakeService:
-    def __init__(self, db: Session | None = None):
+    def __init__(
+        self,
+        db: Session | None = None,
+        *,
+        customer_client: CustomerModuleClient | None = None,
+        geocoding_client: GeocodingClient | None = None,
+    ):
         self.db: Session = db or SessionLocal()
         self.repo = DeliveryRequestRepository(self.db)
+        self.customer_repo = CustomerRepository(self.db)
+        self.customer_client = customer_client or CustomerModuleClient()
+        self.geocoding_client = geocoding_client or GeocodingClient()
 
     def receive_delivery_request(self, payload: DeliveryRequestCreate) -> IntakeResponse:
         raw_payload = payload.model_dump(mode="json")
@@ -56,12 +78,42 @@ class IntakeService:
             delivery_request_id=delivery_request.id,
         )
 
-    def sync_customer_details(self, delivery_request_id: UUID):
-        return {
-            "message": "Customer details sync placeholder",
-            "delivery_request_id": delivery_request_id,
-            "sync_status": "placeholder",
-        }
+    def sync_customer_details(self, delivery_request_id: UUID) -> CustomerSyncResponse:
+        delivery_request = self.repo.get_by_id(delivery_request_id)
+        if delivery_request is None:
+            raise DeliveryRequestNotFoundError(
+                f"Delivery request {delivery_request_id} was not found"
+            )
+
+        customer = self.customer_client.get_customer_details(delivery_request.customer_id)
+        geocode = self.geocoding_client.geocode_address(
+            street=customer.address.street,
+            city=customer.address.city,
+            province=customer.address.province,
+            postal_code=customer.address.postal_code,
+            country=customer.address.country,
+        )
+
+        self.customer_repo.save_customer_enrichment(
+            delivery_request_id=delivery_request_id,
+            raw_payload=customer.model_dump(mode="json"),
+            customer_name=customer.customer_name,
+            phone_number=customer.phone_number,
+            street=customer.address.street,
+            city=customer.address.city,
+            province=customer.address.province,
+            postal_code=customer.address.postal_code,
+            country=customer.address.country,
+            latitude=geocode.latitude,
+            longitude=geocode.longitude,
+            geocode_status="resolved",
+        )
+
+        return CustomerSyncResponse(
+            message="Customer details synced (v1)",
+            delivery_request_id=delivery_request_id,
+            sync_status="completed",
+        )
 
     def close(self) -> None:
         self.db.close()

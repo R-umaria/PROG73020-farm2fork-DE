@@ -23,7 +23,6 @@ class DeliveryRequestCreate(BaseModel):
     request_timestamp: datetime
     items: list[DeliveryItemCreate] = Field(default_factory=list)
 
-
     @field_validator("request_timestamp")
     @classmethod
     def validate_request_timestamp(cls, value: datetime) -> datetime:
@@ -46,4 +45,4 @@ class CustomerSyncResponse(BaseModel):
 
     message: str
     delivery_request_id: UUID
-    sync_status: Literal["placeholder"]
+    sync_status: Literal["completed"]

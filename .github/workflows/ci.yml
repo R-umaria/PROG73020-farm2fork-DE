@@ -40,8 +40,8 @@ jobs:
       - name: Verify required tables exist after migration
         run: |
           docker compose exec -T db psql -U postgres -d farm2fork -c "\dt"
-          table_count=$(docker compose exec -T db psql -U postgres -d farm2fork -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('delivery_request', 'delivery_item', 'delivery_request_snapshot');")
-          test "$table_count" = "3"
+          table_count=$(docker compose exec -T db psql -U postgres -d farm2fork -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('delivery_request', 'delivery_item', 'delivery_request_snapshot', 'delivery_execution', 'status_history');")
+          test "$table_count" = "5"
 
       - name: Run tests inside app container
         run: docker compose exec -T app pytest -q --tb=short

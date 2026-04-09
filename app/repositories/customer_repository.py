@@ -31,26 +31,47 @@ class CustomerRepository:
         longitude=None,
         geocode_status: str | None = None,
     ) -> CustomerDetails:
-        snapshot = CustomerDetailsSnapshot(
-            delivery_request_id=delivery_request_id,
-            customer_payload=raw_payload,
+        snapshot = (
+            self.db.query(CustomerDetailsSnapshot)
+            .filter(CustomerDetailsSnapshot.delivery_request_id == delivery_request_id)
+            .first()
         )
-        self.db.add(snapshot)
+        if snapshot is None:
+            snapshot = CustomerDetailsSnapshot(
+                delivery_request_id=delivery_request_id,
+                customer_payload=raw_payload,
+            )
+            self.db.add(snapshot)
+        else:
+            snapshot.customer_payload = raw_payload
 
-        customer_details = CustomerDetails(
-            delivery_request_id=delivery_request_id,
-            customer_name=customer_name,
-            phone_number=phone_number,
-            street=street,
-            city=city,
-            province=province,
-            postal_code=postal_code,
-            country=country,
-            latitude=latitude,
-            longitude=longitude,
-            geocode_status=geocode_status,
-        )
-        self.db.add(customer_details)
+        customer_details = self.get_by_delivery_request_id(delivery_request_id)
+        if customer_details is None:
+            customer_details = CustomerDetails(
+                delivery_request_id=delivery_request_id,
+                customer_name=customer_name,
+                phone_number=phone_number,
+                street=street,
+                city=city,
+                province=province,
+                postal_code=postal_code,
+                country=country,
+                latitude=latitude,
+                longitude=longitude,
+                geocode_status=geocode_status,
+            )
+            self.db.add(customer_details)
+        else:
+            customer_details.customer_name = customer_name
+            customer_details.phone_number = phone_number
+            customer_details.street = street
+            customer_details.city = city
+            customer_details.province = province
+            customer_details.postal_code = postal_code
+            customer_details.country = country
+            customer_details.latitude = latitude
+            customer_details.longitude = longitude
+            customer_details.geocode_status = geocode_status
 
         self.db.commit()
         self.db.refresh(customer_details)
