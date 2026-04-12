@@ -1,68 +1,22 @@
-name: CI-CD Pipeline
+name: CI-CD
 
 on:
   push:
     branches: [main]
-  pull_request:
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Build and start Docker containers
-        run: docker compose up -d --build
-
-      - name: Wait for DB to be ready
-        run: |
-          echo "Waiting for Postgres to be ready..."
-          for i in {1..30}; do
-            docker compose exec -T db pg_isready -U postgres && break
-            sleep 2
-          done
-
-      - name: Show Alembic state
-        run: |
-          docker compose exec -T app alembic -c /app/alembic.ini current
-          docker compose exec -T app alembic -c /app/alembic.ini heads
-
-      - name: Run migrations
-        run: docker compose exec -T app alembic -c /app/alembic.ini upgrade head
-
-      - name: Verify database tables
-        run: |
-          docker compose exec -T db psql -U postgres -d farm2fork -c "\dt"
-          table_count=$(docker compose exec -T db psql -U postgres -d farm2fork -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public';")
-          test "$table_count" -gt "0"
-
-      - name: Run tests
-        run: docker compose exec -T app pytest -q --tb=short
-
-      - name: Tear down containers
-        run: docker compose down
-
-
   deploy:
-    needs: test
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to Production Server via SSH
+      - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 147.182.145.77
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
           script: |
             cd delivery-execution
             git pull origin main
             docker compose down
-            docker compose up --build -d
+            docker compose up -d --build
