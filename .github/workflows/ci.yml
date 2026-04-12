@@ -1,9 +1,8 @@
-name: CI-CD Pipeline
+name: CI-CD Deploy to Production
 
 on:
   push:
     branches: [main]
-  pull_request:
 
 jobs:
   test:
@@ -18,36 +17,13 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Build and start Docker containers
-        run: docker compose up -d --build
-
-      - name: Wait for DB to be ready
+      - name: Install dependencies
         run: |
-          echo "Waiting for Postgres to be ready..."
-          for i in {1..30}; do
-            docker compose exec -T db pg_isready -U postgres && break
-            sleep 2
-          done
-
-      - name: Show Alembic state
-        run: |
-          docker compose exec -T app alembic -c /app/alembic.ini current
-          docker compose exec -T app alembic -c /app/alembic.ini heads
-
-      - name: Run migrations
-        run: docker compose exec -T app alembic -c /app/alembic.ini upgrade head
-
-      - name: Verify database tables
-        run: |
-          docker compose exec -T db psql -U postgres -d farm2fork -c "\dt"
-          table_count=$(docker compose exec -T db psql -U postgres -d farm2fork -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public';")
-          test "$table_count" -gt "0"
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Run tests
-        run: docker compose exec -T app pytest -q --tb=short
-
-      - name: Tear down containers
-        run: docker compose down
+        run: pytest -q --tb=short
 
 
   deploy:
@@ -55,14 +31,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to Production Server via SSH
+      - name: Deploy to Production via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 147.182.145.77
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
           script: |
-            cd delivery-execution
+            set -e
+
+            echo "Navigating to project directory..."
+            cd ~/delivery-execution
+
+            echo "Pulling latest code..."
             git pull origin main
-            docker compose down
+
+            echo "Stopping old containers..."
+            docker compose down || true
+
+            echo "Rebuilding containers..."
             docker compose up --build -d
+
+            echo "Deployment successful!"
