@@ -44,7 +44,7 @@ jobs:
         run: docker compose down
 
   deploy:
-    needs: test   # 🚨 VERY IMPORTANT
+    needs: test   
     runs-on: ubuntu-latest
 
     steps:
@@ -64,5 +64,5 @@ jobs:
             sleep 10
 
             echo "Running health check..."
-            curl -f http://localhost:8000/api/v1/health || exit 1
+            curl -f http://localhost:8000/api/health || exit 1
 
