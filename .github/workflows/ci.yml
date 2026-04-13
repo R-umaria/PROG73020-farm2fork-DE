@@ -3,13 +3,52 @@ name: CI-CD
 on:
   push:
     branches: [main]
+  pull_request:
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to server
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build and start Docker containers
+        run: docker compose up -d --build
+
+      - name: Wait for DB to be ready
+        run: |
+          echo "Waiting for Postgres..."
+          for i in {1..30}; do
+            docker compose exec -T db pg_isready -U postgres && break
+            sleep 2
+          done
+
+      - name: Run Alembic migrations
+        run: docker compose exec -T app alembic -c /app/alembic.ini upgrade head
+
+      - name: Verify required tables exist
+        run: |
+          table_count=$(docker compose exec -T db psql -U postgres -d farm2fork -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_name IN ('delivery_request','delivery_item','delivery_request_snapshot','delivery_execution','status_history');")
+          test "$table_count" = "5"
+
+      - name: Run tests
+        run: docker compose exec -T app pytest -q --tb=short
+
+      - name: Tear down containers
+        run: docker compose down
+
+  deploy:
+    needs: test   # 🚨 VERY IMPORTANT
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Production via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.PROD_HOST }}
@@ -20,3 +59,10 @@ jobs:
             git pull origin main
             docker compose down
             docker compose up -d --build
+
+            echo "Waiting for app..."
+            sleep 10
+
+            echo "Running health check..."
+            curl -f http://localhost:8000/api/v1/health || exit 1
+
