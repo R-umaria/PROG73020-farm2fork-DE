@@ -14,7 +14,7 @@ jobs:
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
+          key: ${{ secrets.SSH_KEY }}
           script: |
             cd delivery-execution
             git pull origin main
