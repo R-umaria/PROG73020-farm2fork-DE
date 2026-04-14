@@ -83,3 +83,48 @@ class CustomerRepository:
             .filter(CustomerDetails.delivery_request_id == delivery_request_id)
             .first()
         )
+    def list_pending_geocodes(self) -> list[CustomerDetails]:
+        return (
+            self.db.query(CustomerDetails)
+            .filter(
+                (CustomerDetails.latitude.is_(None)) |
+                (CustomerDetails.longitude.is_(None)) |
+                (CustomerDetails.geocode_status.is_(None)) |
+                (CustomerDetails.geocode_status != "resolved")
+            )
+            .all()
+        )
+
+    def update_customer_geocode(
+        self,
+        *,
+        delivery_request_id: UUID,
+        latitude: float,
+        longitude: float,
+        geocode_status: str,
+    ) -> CustomerDetails | None:
+        customer_details = self.get_by_delivery_request_id(delivery_request_id)
+        if customer_details is None:
+            return None
+
+        customer_details.latitude = latitude
+        customer_details.longitude = longitude
+        customer_details.geocode_status = geocode_status
+        self.db.commit()
+        self.db.refresh(customer_details)
+        return customer_details
+    
+    def update_geocode_status(
+        self,
+        *,
+        delivery_request_id: UUID,
+        geocode_status: str,
+    ) -> CustomerDetails | None:
+        customer_details = self.get_by_delivery_request_id(delivery_request_id)
+        if customer_details is None:
+            return None
+
+        customer_details.geocode_status = geocode_status
+        self.db.commit()
+        self.db.refresh(customer_details)
+        return customer_details

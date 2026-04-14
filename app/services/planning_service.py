@@ -23,6 +23,11 @@ from app.schemas.planning import (
 )
 from app.services.driver_assignment_policy import DriverAssignmentPolicy
 
+from app.integrations.errors import UpstreamBadResponseError, UpstreamNotFoundError, UpstreamTimeoutError
+from app.integrations.geocoding_client import GeocodingClient
+from app.repositories.customer_repository import CustomerRepository
+from app.schemas.planning import PlanningResponse
+
 RegionSource = Literal["postal_prefix", "city_province"]
 HandlingType = Literal["delivery", "pickup"]
 
@@ -32,22 +37,50 @@ class PlanningService:
         self,
         db: Session | None = None,
         driver_assignment_policy: DriverAssignmentPolicy | None = None,
+        geocoding_client: GeocodingClient | None = None,
     ):
         self.db: Session = db or SessionLocal()
         self.repo = PlanningRepository(self.db)
         self.execution_repo = ExecutionRepository(self.db)
+        self.customer_repo = CustomerRepository(self.db)
         self.driver_assignment_policy = driver_assignment_policy or DriverAssignmentPolicy()
+        self.geocoding_client = geocoding_client or GeocodingClient()
 
-    def geocode_pending_requests(self):
-        """Return the current status of the legacy geocode batch hook.
+    def geocode_pending_requests(self) -> PlanningResponse:
+        pending = self.customer_repo.list_pending_geocodes()
+        resolved_count = 0
+        failed_count = 0
 
-        Backlog enrichment now happens through the intake/customer-sync flow, so
-        this method remains a no-op status response until a dedicated batch job is
-        introduced. Keeping it explicit avoids implying hidden planning behavior.
-        """
+        for customer in pending:
+            try:
+                geocode = self.geocoding_client.geocode_address(
+                    street=customer.street,
+                    city=customer.city,
+                    province=customer.province,
+                    postal_code=customer.postal_code,
+                    country=customer.country,
+                )
+                self.customer_repo.update_customer_geocode(
+                    delivery_request_id=customer.delivery_request_id,
+                    latitude=geocode.latitude,
+                    longitude=geocode.longitude,
+                    geocode_status="resolved",
+                )
+                resolved_count += 1
 
-        return {"message": "Pending address geocoding is not implemented in this service path"}
+            except (UpstreamBadResponseError, UpstreamNotFoundError, UpstreamTimeoutError):
+                self.customer_repo.update_geocode_status(
+                    delivery_request_id=customer.delivery_request_id,
+                    geocode_status="failed",
+                )
+                failed_count += 1
 
+        return PlanningResponse(
+            message="Pending geocoding completed",
+            resolved_count=resolved_count,
+            failed_count=failed_count,
+        ) 
+    
     def group_backlog(self) -> GroupBacklogResponse:
         grouped: dict[tuple[str, str], list[BacklogPlanningCandidate]] = defaultdict(list)
         skips: list[BacklogPlanningSkip] = []
