@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     driver_service_timeout_seconds: float = 5.0
     driver_service_enable_dev_fallback: bool = False
     frontend_allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    valhalla_base_url: str = "http://valhalla:8002"
+    valhalla_timeout_seconds: float = 10.0
+    valhalla_enable_routing: bool = False 
 
     @property
     def frontend_allowed_origins_list(self) -> list[str]:
