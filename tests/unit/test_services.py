@@ -1,4 +1,4 @@
-#command: docker-compose exec app pytest tests/unit/test_services.py
+#command: docker-compose exec app pytest tests/unit/test_services.py for testing
 
 import unittest
 from dataclasses import dataclass
