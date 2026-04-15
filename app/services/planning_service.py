@@ -284,6 +284,7 @@ class PlanningService:
             route_group_id=route_group_id,
             estimated_distance_km=result.total_distance_km,
             estimated_duration_min=int(result.total_duration_seconds // 60),
+            route_payload=result.raw_payload,
         )
 
         base_time = valid_stops[0].estimated_arrival

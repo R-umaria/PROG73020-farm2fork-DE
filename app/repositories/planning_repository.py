@@ -163,12 +163,13 @@ class PlanningRepository:
         )
         return {driver_id: load_count for driver_id, load_count in rows}
 
-    def update_route_group_routing(self,*,route_group_id: UUID,estimated_distance_km: float,estimated_duration_min: int,) -> RouteGroup | None:
+    def update_route_group_routing(self,*,route_group_id: UUID,estimated_distance_km: float,estimated_duration_min: int, route_payload:dict | None = None,) -> RouteGroup | None:
         group = self.db.query(RouteGroup).filter(RouteGroup.id == route_group_id).first()
         if group is None:
             return None
         group.estimated_distance_km = estimated_distance_km
         group.estimated_duration_min = estimated_duration_min
+        group.route_payload = route_payload
         self.db.commit()
         self.db.refresh(group)
         return group
