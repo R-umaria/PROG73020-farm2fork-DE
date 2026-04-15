@@ -16,10 +16,10 @@ services:
       retries: 5
 
   app:
-    build: .
+    build:
+      context: .
+      target: api
     container_name: farm2fork_api
-    volumes:
-      - .:/app
     env_file:
       - .env
     depends_on:
@@ -29,3 +29,17 @@ services:
       DATABASE_URL: postgresql://postgres:password@db:5432/farm2fork
     ports:
       - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      target: frontend
+    container_name: farm2fork_driver_portal
+    depends_on:
+      - app
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    restart: unless-stopped

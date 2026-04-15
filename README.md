@@ -54,38 +54,20 @@ docker compose up --build
 The root `.env` file is intentionally not committed; create it locally from `.env.example`.
 
 Then open:
-- API root: `http://localhost:8000/api/health`
-- UI: `http://localhost:8000/`
-- Docs: `http://localhost:8000/docs`
+- API health: `http://localhost:8000/api/health`
+- API docs: `http://localhost:8000/docs`
+- Driver portal: `http://localhost:3000/`
 
 ## Implementation rule
 Keep business logic in `services/`, DB access in `repositories/`, external calls in `integrations/`, and HTTP handling in `api/routes/`.
 
 
 ## Connected React/Next driver portal
-The separate driver portal under `frontend/driver-portal/` is now wired to the live backend APIs.
+The production driver UI is `frontend/driver-portal/`. `docker compose up --build` now starts the backend API, PostgreSQL, and the Next.js driver portal together from the same root `Dockerfile`.
 
-### Backend setup for the connected portal
-```bash
-cp .env.example .env
-```
-
-For local demo mode without an external Driver Service, enable the explicit fallback roster:
+For local demo mode without an external Driver Service, enable the explicit fallback roster in `.env`:
 ```bash
 DRIVER_SERVICE_ENABLE_DEV_FALLBACK=true
-```
-
-Then start the backend:
-```bash
-docker compose up --build
-```
-
-### Frontend setup
-```bash
-cd frontend/driver-portal
-cp .env.example .env.local
-npm install
-npm run dev
 ```
 
 Frontend environment:
@@ -93,4 +75,4 @@ Frontend environment:
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 ```
 
-The backend now allows requests from `http://localhost:3000` by default through `FRONTEND_ALLOWED_ORIGINS`.
+The backend allows requests from `http://localhost:3000` by default through `FRONTEND_ALLOWED_ORIGINS`.

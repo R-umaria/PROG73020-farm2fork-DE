@@ -1,0 +1,11 @@
+.git
+.github
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+node_modules
+frontend/driver-portal/node_modules
+frontend/driver-portal/.next
