@@ -86,12 +86,19 @@ class IntakeService:
             )
 
         customer = self.customer_client.get_customer_details(delivery_request.customer_id)
+
+        normalized_street = self._normalize_text(customer.address.street)
+        normalized_city = self._normalize_text(customer.address.city)
+        normalized_province = self._normalize_text(customer.address.province)
+        normalized_postal_code = self._normalize_postal_code(customer.address.postal_code)
+        normalized_country = self._normalize_text(customer.address.country)
+
         geocode = self.geocoding_client.geocode_address(
-            street=customer.address.street,
-            city=customer.address.city,
-            province=customer.address.province,
-            postal_code=customer.address.postal_code,
-            country=customer.address.country,
+            street=normalized_street,
+            city=normalized_city,
+            province=normalized_province,
+            postal_code=normalized_postal_code,
+            country=normalized_country,
         )
 
         self.customer_repo.save_customer_enrichment(
@@ -99,11 +106,11 @@ class IntakeService:
             raw_payload=customer.model_dump(mode="json"),
             customer_name=customer.customer_name,
             phone_number=customer.phone_number,
-            street=customer.address.street,
-            city=customer.address.city,
-            province=customer.address.province,
-            postal_code=customer.address.postal_code,
-            country=customer.address.country,
+            street=normalized_street,
+            city=normalized_city,
+            province=normalized_province,
+            postal_code=normalized_postal_code,
+            country=normalized_country,
             latitude=geocode.latitude,
             longitude=geocode.longitude,
             geocode_status="resolved",
@@ -117,6 +124,17 @@ class IntakeService:
 
     def close(self) -> None:
         self.db.close()
+    
+    @staticmethod
+    def _normalize_text(value: str) -> str:
+        return " ".join(value.strip().split())
+
+    @staticmethod
+    def _normalize_postal_code(value: str) -> str:
+        cleaned = "".join(ch for ch in value.upper() if ch.isalnum())
+        if len(cleaned) == 6:
+            return f"{cleaned[:3]} {cleaned[3:]}"
+        return cleaned
 
     def _canonicalize_existing_request(self, existing) -> dict[str, Any]:
         if existing.request_snapshot is not None:

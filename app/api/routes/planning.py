@@ -3,6 +3,9 @@ from fastapi import APIRouter
 from app.schemas.planning import GroupBacklogResponse, PlanningResponse, ScheduleRoutesResponse
 from app.services.planning_service import PlanningService
 
+from uuid import UUID
+from app.schemas.planning import PlanningResponse
+
 router = APIRouter()
 service = PlanningService()
 
@@ -30,3 +33,14 @@ def group_backlog():
 )
 def schedule_routes():
     return service.schedule_routes()
+
+@router.post(
+    "/route-group/{route_group_id}/optimize",
+    response_model=PlanningResponse,
+    summary="Optimize route for a single route group via Valhalla",
+)
+def optimize_route_group(route_group_id: UUID):
+    success = service.optimize_route_group(route_group_id)
+    return PlanningResponse(
+        message="Route optimized" if success else "Routing skipped or unavailable"
+    )

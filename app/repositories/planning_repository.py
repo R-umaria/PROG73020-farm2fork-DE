@@ -162,3 +162,22 @@ class PlanningRepository:
             .all()
         )
         return {driver_id: load_count for driver_id, load_count in rows}
+
+    def update_route_group_routing(self,*,route_group_id: UUID,estimated_distance_km: float,estimated_duration_min: int,) -> RouteGroup | None:
+        group = self.db.query(RouteGroup).filter(RouteGroup.id == route_group_id).first()
+        if group is None:
+            return None
+        group.estimated_distance_km = estimated_distance_km
+        group.estimated_duration_min = estimated_duration_min
+        self.db.commit()
+        self.db.refresh(group)
+        return group
+
+    def update_route_stop_eta(self,*,route_stop_id: UUID,estimated_arrival,) -> RouteStop | None:
+        stop = self.db.query(RouteStop).filter(RouteStop.id == route_stop_id).first()
+        if stop is None:
+            return None
+        stop.estimated_arrival = estimated_arrival
+        self.db.commit()
+        self.db.refresh(stop)
+        return stop

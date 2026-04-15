@@ -23,6 +23,13 @@ from app.schemas.planning import (
 )
 from app.services.driver_assignment_policy import DriverAssignmentPolicy
 
+from app.integrations.errors import UpstreamBadResponseError, UpstreamNotFoundError, UpstreamTimeoutError
+from app.integrations.geocoding_client import GeocodingClient
+from app.repositories.customer_repository import CustomerRepository
+from app.schemas.planning import PlanningResponse
+
+from app.integrations.valhalla_client import ValhallaClient
+
 RegionSource = Literal["postal_prefix", "city_province"]
 HandlingType = Literal["delivery", "pickup"]
 
@@ -32,22 +39,52 @@ class PlanningService:
         self,
         db: Session | None = None,
         driver_assignment_policy: DriverAssignmentPolicy | None = None,
+        geocoding_client: GeocodingClient | None = None,
+        valhalla_client: ValhallaClient | None = None,
     ):
         self.db: Session = db or SessionLocal()
         self.repo = PlanningRepository(self.db)
         self.execution_repo = ExecutionRepository(self.db)
+        self.customer_repo = CustomerRepository(self.db)
         self.driver_assignment_policy = driver_assignment_policy or DriverAssignmentPolicy()
+        self.geocoding_client = geocoding_client or GeocodingClient()
+        self.valhalla_client = valhalla_client or ValhallaClient()
 
-    def geocode_pending_requests(self):
-        """Return the current status of the legacy geocode batch hook.
+    def geocode_pending_requests(self) -> PlanningResponse:
+        pending = self.customer_repo.list_pending_geocodes()
+        resolved_count = 0
+        failed_count = 0
 
-        Backlog enrichment now happens through the intake/customer-sync flow, so
-        this method remains a no-op status response until a dedicated batch job is
-        introduced. Keeping it explicit avoids implying hidden planning behavior.
-        """
+        for customer in pending:
+            try:
+                geocode = self.geocoding_client.geocode_address(
+                    street=customer.street,
+                    city=customer.city,
+                    province=customer.province,
+                    postal_code=customer.postal_code,
+                    country=customer.country,
+                )
+                self.customer_repo.update_customer_geocode(
+                    delivery_request_id=customer.delivery_request_id,
+                    latitude=geocode.latitude,
+                    longitude=geocode.longitude,
+                    geocode_status="resolved",
+                )
+                resolved_count += 1
 
-        return {"message": "Pending address geocoding is not implemented in this service path"}
+            except (UpstreamBadResponseError, UpstreamNotFoundError, UpstreamTimeoutError):
+                self.customer_repo.update_geocode_status(
+                    delivery_request_id=customer.delivery_request_id,
+                    geocode_status="failed",
+                )
+                failed_count += 1
 
+        return PlanningResponse(
+            message="Pending geocoding completed",
+            resolved_count=resolved_count,
+            failed_count=failed_count,
+        ) 
+    
     def group_backlog(self) -> GroupBacklogResponse:
         grouped: dict[tuple[str, str], list[BacklogPlanningCandidate]] = defaultdict(list)
         skips: list[BacklogPlanningSkip] = []
@@ -185,6 +222,8 @@ class PlanningService:
                         current_status=INITIAL_DELIVERY_EXECUTION_STATUS,
                     )
 
+            self.optimize_route_group(route_group.id)
+
             scheduled_groups.append(
                 ScheduledRouteGroup(
                     route_group_id=route_group.id,
@@ -209,6 +248,61 @@ class PlanningService:
             unassigned_group_count=unassigned_group_count,
             route_groups=scheduled_groups,
         )
+    
+    def optimize_route_group(self, route_group_id: UUID) -> bool:
+        from app.core.config import settings
+        from datetime import timezone
+
+        if not settings.valhalla_enable_routing:
+            return False
+
+        group = self.repo.get_route_group_by_id(route_group_id)
+        if group is None:
+            return False
+
+        stops = sorted(group.stops, key=lambda s: (s.sequence, str(s.id)))
+
+        # collect geocodes and skip stops with no coordinates
+        locations: list[tuple[float, float]] = []
+        valid_stops = []
+        for stop in stops:
+            cd = stop.delivery_request.customer_details if stop.delivery_request else None
+            if cd and cd.latitude is not None and cd.longitude is not None:
+                locations.append((float(cd.latitude), float(cd.longitude)))
+                valid_stops.append(stop)
+
+        if len(locations) < 2:
+            return False
+
+        try:
+            result = self.valhalla_client.optimized_route(locations)
+        except Exception:
+            return False
+
+        # persist route group summary
+        self.repo.update_route_group_routing(
+            route_group_id=route_group_id,
+            estimated_distance_km=result.total_distance_km,
+            estimated_duration_min=int(result.total_duration_seconds // 60),
+        )
+
+        base_time = valid_stops[0].estimated_arrival
+        if base_time is not None and base_time.tzinfo is None:
+            base_time = base_time.replace(tzinfo=timezone.utc)
+
+        if base_time is not None:
+            from datetime import timedelta
+            for leg in result.legs:
+                # leg.sequence is for arrival stop
+                idx = leg.sequence - 1  # 0 into valid_stops
+                if idx < len(valid_stops):
+                    eta = base_time + timedelta(seconds=leg.eta_offset_seconds)
+                    self.repo.update_route_stop_eta(
+                        route_stop_id=valid_stops[idx].id,
+                        estimated_arrival=eta,
+                    )
+
+        return True
 
     def close(self) -> None:
         self.db.close()
