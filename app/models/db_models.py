@@ -108,7 +108,7 @@ class RouteGroup(Base):
 
     stops = relationship("RouteStop", back_populates="route_group", cascade="all, delete-orphan")
     driver_assignments = relationship("DriverAssignment", back_populates="route_group", cascade="all, delete-orphan")
-
+    route_payload = Column(JSON, nullable=True) #the valhalla raw response in json
 
 class RouteStop(Base):
     __tablename__ = "route_stop"

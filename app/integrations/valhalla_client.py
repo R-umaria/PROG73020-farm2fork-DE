@@ -26,6 +26,7 @@ class RouteResult:
     total_distance_km: float
     total_duration_seconds: float
     legs: list[RouteLeg]
+    raw_payload: dict | None = None
 
 
 class ValhallaClient:
@@ -98,6 +99,7 @@ class ValhallaClient:
             total_distance_km=total_distance_km,
             total_duration_seconds=total_duration_seconds,
             legs=legs,
+            raw_payload=payload
         )
 
     def _post(self, url: str, body: dict) -> httpx.Response:
