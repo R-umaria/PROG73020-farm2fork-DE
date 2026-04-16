@@ -37,6 +37,7 @@ class DeliveryStatusResponse(BaseModel):
     stop_sequence: int | None = None
     stop_status: str | None = None
     estimated_arrival: datetime | None = None
+    scheduled_for: datetime | None = None
     assigned_driver_id: int | None = None
     assignment_status: str | None = None
     dispatched_at: datetime | None = None
