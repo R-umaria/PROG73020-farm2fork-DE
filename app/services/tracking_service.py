@@ -47,13 +47,31 @@ class TrackingService:
         route_stop = self._select_route_stop(delivery_request.route_stops)
         route_group = route_stop.route_group if route_stop is not None else None
         assignment = self._select_active_assignment(route_group.driver_assignments if route_group is not None else [])
+        
+        #Customer status mapping
+        internal_status = normalize_delivery_execution_status(execution.current_status)
+        
+        status_map = {
+            "received": "order_placed",
+            "scheduled": "scheduled",
+            "out_for_delivery": "out_for_delivery",
+            "completed": "delivered",
+            "picked_up": "available_for_pickup",
+        }
+        
+        mapped_status = status_map.get(internal_status, "order_placed")
+
+
 
         return DeliveryStatusResponse(
             order_id=delivery_request.order_id,
             customer_id=delivery_request.customer_id,
             delivery_request_id=delivery_request.id,
             delivery_execution_id=execution.id,
-            delivery_status=normalize_delivery_execution_status(execution.current_status),
+            
+            #delivery_status=normalize_delivery_execution_status(execution.current_status),
+            delivery_status=mapped_status,
+            
             latest_status_at=self._ensure_utc(latest_history.changed_at) if latest_history is not None else None,
             latest_status_reason=latest_history.reason if latest_history is not None else None,
             route_group_id=route_group.id if route_group is not None else None,
