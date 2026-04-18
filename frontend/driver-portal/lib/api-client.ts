@@ -32,6 +32,36 @@ export interface DriverSchedule {
   stops: DriverScheduleStop[]
 }
 
+export interface RouteMapCoordinate {
+  latitude: number
+  longitude: number
+}
+
+export interface RouteMapWaypoint {
+  latitude: number
+  longitude: number
+  label: string
+  address: string | null
+  sequence: number | null
+  route_stop_id: string | null
+  delivery_request_id: string | null
+  order_id: number | null
+  stop_status: string | null
+}
+
+export interface RouteMapData {
+  route_group_id: string
+  route_group_name: string
+  route_group_status: string
+  routing_status: string
+  provider: string
+  warehouse: RouteMapWaypoint
+  stops: RouteMapWaypoint[]
+  path: RouteMapCoordinate[]
+  estimated_distance_km: number | null
+  estimated_duration_min: number | null
+}
+
 export interface DeliveryItem {
   external_item_id: number
   item_name: string
@@ -133,6 +163,10 @@ export function listDrivers(): Promise<DriverSummary[]> {
 
 export function getDriverSchedule(driverId: number): Promise<DriverSchedule> {
   return apiFetch<DriverSchedule>(`/api/driver/schedule/today/${driverId}`)
+}
+
+export function getRouteMap(routeGroupId: string): Promise<RouteMapData> {
+  return apiFetch<RouteMapData>(`/api/planning/route-group/${routeGroupId}/map`)
 }
 
 export function getDeliveryRecord(deliveryRequestId: string): Promise<DeliveryRecord> {

@@ -97,7 +97,9 @@ class PlanningRepository:
         return (
             self.db.query(RouteGroup)
             .options(
-                selectinload(RouteGroup.stops),
+                selectinload(RouteGroup.stops)
+                .selectinload(RouteStop.delivery_request)
+                .selectinload(DeliveryRequest.customer_details),
                 selectinload(RouteGroup.driver_assignments),
             )
             .filter(RouteGroup.id == route_group_id)

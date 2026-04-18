@@ -1,10 +1,10 @@
-from fastapi import APIRouter
+from uuid import UUID
+
+from fastapi import APIRouter, HTTPException
 
 from app.schemas.planning import GroupBacklogResponse, PlanningResponse, ScheduleRoutesResponse
+from app.schemas.routing import RouteMapResponse
 from app.services.planning_service import PlanningService
-
-from uuid import UUID
-from app.schemas.planning import PlanningResponse
 
 router = APIRouter()
 service = PlanningService()
@@ -34,6 +34,7 @@ def group_backlog():
 def schedule_routes():
     return service.schedule_routes()
 
+
 @router.post(
     "/route-group/{route_group_id}/optimize",
     response_model=PlanningResponse,
@@ -44,3 +45,15 @@ def optimize_route_group(route_group_id: UUID):
     return PlanningResponse(
         message="Route optimized" if success else "Routing skipped or unavailable"
     )
+
+
+@router.get(
+    "/route-group/{route_group_id}/map",
+    response_model=RouteMapResponse,
+    summary="Get route geometry and stop coordinates for a route group",
+)
+def get_route_group_map(route_group_id: UUID):
+    try:
+        return service.get_route_map(route_group_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
     app_name: str = "Farm2Fork Delivery Execution Service"
     app_version: str = "0.1.0"
@@ -21,7 +22,15 @@ class Settings(BaseSettings):
     frontend_allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     valhalla_base_url: str = "http://valhalla:8002"
     valhalla_timeout_seconds: float = 10.0
-    valhalla_enable_routing: bool = False 
+    valhalla_enable_routing: bool = False
+    warehouse_name: str = "Farm2Fork Warehouse"
+    warehouse_street: str = "100 Queen St W"
+    warehouse_city: str = "Toronto"
+    warehouse_province: str = "ON"
+    warehouse_postal_code: str = "M5H 2N2"
+    warehouse_country: str = "Canada"
+    warehouse_latitude: float = 43.6534817
+    warehouse_longitude: float = -79.3839347
 
     @property
     def frontend_allowed_origins_list(self) -> list[str]:
@@ -29,6 +38,18 @@ class Settings(BaseSettings):
 
         return [origin.strip() for origin in self.frontend_allowed_origins.split(",") if origin.strip()]
 
+    @property
+    def warehouse_address(self) -> str:
+        parts = [
+            self.warehouse_street,
+            self.warehouse_city,
+            self.warehouse_province,
+            self.warehouse_postal_code,
+            self.warehouse_country,
+        ]
+        return ", ".join(part.strip() for part in parts if isinstance(part, str) and part.strip())
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
 
 settings = Settings()

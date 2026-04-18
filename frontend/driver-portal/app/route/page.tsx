@@ -1,8 +1,8 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronRight, MapPin, Navigation, Route, Truck, User } from "lucide-react"
+import { ChevronRight, Clock3, MapPin, Navigation, Route, Truck, User } from "lucide-react"
 
 import { AppShell } from "@/components/delivery/app-shell"
 import { DeliveryCard } from "@/components/delivery/delivery-card"
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { useDriverPortalData } from "@/hooks/use-driver-portal-data"
 import { useDriverSession } from "@/hooks/use-driver-session"
+import { getRouteMap, type RouteMapData } from "@/lib/api-client"
 import { formatRouteLabel, formatShortTime, formatTimeWindow } from "@/lib/portal-formatters"
 
 export default function RouteOverviewPage() {
@@ -27,16 +28,45 @@ export default function RouteOverviewPage() {
       }
     : null
   const { data, isLoading, error, refresh } = useDriverPortalData(driver)
+  const [routeMap, setRouteMap] = useState<RouteMapData | null>(null)
+  const [routeMapError, setRouteMapError] = useState<string | null>(null)
+  const [isRouteMapLoading, setIsRouteMapLoading] = useState(false)
 
-  const routeStops = useMemo(
-    () =>
-      (data?.stops ?? []).map((stop) => ({
-        id: stop.routeStopId,
-        name: stop.customerName,
-        status: stop.deliveryStatus,
-      })),
-    [data?.stops],
-  )
+  useEffect(() => {
+    const routeGroupId = data?.stops[0]?.routeGroupId
+    if (!routeGroupId) {
+      setRouteMap(null)
+      setRouteMapError(null)
+      setIsRouteMapLoading(false)
+      return
+    }
+
+    let isCancelled = false
+    setIsRouteMapLoading(true)
+    setRouteMapError(null)
+
+    void getRouteMap(routeGroupId)
+      .then((payload) => {
+        if (!isCancelled) {
+          setRouteMap(payload)
+        }
+      })
+      .catch((caughtError) => {
+        if (!isCancelled) {
+          setRouteMap(null)
+          setRouteMapError(caughtError instanceof Error ? caughtError.message : "Unable to load route map.")
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsRouteMapLoading(false)
+        }
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [data?.stops[0]?.routeGroupId])
 
   if (!isReady || !session) {
     return null
@@ -60,9 +90,17 @@ export default function RouteOverviewPage() {
           <StatePanel icon={Route} title="No route planned yet" message="Once planning assigns route stops to this driver, the route overview will appear here." actionLabel="Refresh" onAction={() => void refresh()} />
         ) : (
           <>
-            <RouteMap stops={routeStops} className="h-[220px]" />
+            {isRouteMapLoading ? (
+              <div className="flex items-center justify-center rounded-2xl border border-border bg-card py-16">
+                <Spinner className="h-8 w-8 text-[var(--muted-teal)]" />
+              </div>
+            ) : routeMapError ? (
+              <StatePanel icon={Route} title="Unable to load route map" message={routeMapError} actionLabel="Retry" onAction={() => void refresh()} />
+            ) : (
+              <RouteMap routeData={routeMap} className="h-[320px]" />
+            )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <div className="bg-card rounded-xl p-4 border border-border">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-[var(--muted-teal)]/10">
@@ -90,6 +128,34 @@ export default function RouteOverviewPage() {
               <div className="bg-card rounded-xl p-4 border border-border">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-[var(--midnight-violet)]/10">
+                    <MapPin className="w-5 h-5 text-[var(--midnight-violet)]" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Distance</p>
+                    <p className="font-semibold text-foreground">
+                      {routeMap?.estimated_distance_km != null ? `${routeMap.estimated_distance_km.toFixed(1)} km` : "Pending"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-card rounded-xl p-4 border border-border">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-[var(--thistle)]">
+                    <Clock3 className="w-5 h-5 text-[var(--twilight-indigo)]" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Duration</p>
+                    <p className="font-semibold text-foreground">
+                      {routeMap?.estimated_duration_min != null ? `${routeMap.estimated_duration_min} min` : "Pending"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-card rounded-xl p-4 border border-border md:col-span-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-[var(--midnight-violet)]/10">
                     <User className="w-5 h-5 text-[var(--midnight-violet)]" />
                   </div>
                   <div>
@@ -99,7 +165,7 @@ export default function RouteOverviewPage() {
                 </div>
               </div>
 
-              <div className="bg-card rounded-xl p-4 border border-border">
+              <div className="bg-card rounded-xl p-4 border border-border md:col-span-2">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-[var(--thistle)]">
                     <Truck className="w-5 h-5 text-[var(--twilight-indigo)]" />
@@ -150,9 +216,11 @@ export default function RouteOverviewPage() {
               </div>
             </section>
 
-            <div className="flex items-center justify-center text-xs text-muted-foreground gap-2">
+            <div className="flex items-center justify-center text-xs text-muted-foreground gap-2 text-center">
               <Navigation className="w-4 h-4" />
-              Live route data is coming from the backend planning and driver APIs.
+              {routeMap?.routing_status === "optimized"
+                ? "The map is rendering the stored Valhalla route geometry for this planned route group."
+                : "The map is rendering the warehouse and stop coordinates; live device location is not required for planned route display."}
             </div>
           </>
         )}
