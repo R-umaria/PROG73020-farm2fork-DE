@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app.integrations.errors import (
     UpstreamBadResponseError,
@@ -30,9 +30,9 @@ service = DriverService()
     summary="Get the current driver's assigned route stops (v1)",
     response_description="Driver schedule view combining upstream driver roster data with locally planned route stops (v1).",
 )
-def get_todays_schedule(driver_id: int):
+def get_todays_schedule(driver_id: int, route_group_id: UUID | None = Query(default=None)):
     try:
-        return service.get_todays_schedule(driver_id)
+        return service.get_todays_schedule(driver_id, route_group_id=route_group_id)
     except UpstreamNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except UpstreamTimeoutError as exc:

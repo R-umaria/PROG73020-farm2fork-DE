@@ -13,7 +13,7 @@ import { useDriverSession } from "@/hooks/use-driver-session"
 import { formatTimeWindow } from "@/lib/portal-formatters"
 
 export default function HistoryPage() {
-  const { session, isReady } = useDriverSession({ required: true })
+  const { session, isReady } = useDriverSession({ required: true, requireShift: true })
   const driver = session
     ? {
         driver_id: session.driverId,
@@ -22,7 +22,7 @@ export default function HistoryPage() {
         driver_status: session.driverStatus,
       }
     : null
-  const { data, isLoading, error, refresh } = useDriverPortalData(driver)
+  const { data, isLoading, error, refresh } = useDriverPortalData(driver, session?.selectedShiftId)
 
   const historyStops = useMemo(
     () => (data?.stops ?? []).filter((stop) => stop.deliveryStatus === "delivered" || stop.deliveryStatus === "failed"),

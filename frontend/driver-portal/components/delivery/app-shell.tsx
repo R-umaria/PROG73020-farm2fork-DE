@@ -12,7 +12,7 @@ interface AppShellProps {
 }
 
 export function AppShell({ children, showNav = true, className }: AppShellProps) {
-  const { isReady, session } = useDriverSession({ required: true })
+  const { isReady, session } = useDriverSession({ required: true, requireShift: true })
 
   if (!isReady || !session) {
     return (

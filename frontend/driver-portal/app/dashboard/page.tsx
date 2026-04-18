@@ -18,7 +18,7 @@ import { formatLongDate, formatRouteLabel, formatShortTime, formatTimeWindow } f
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { session, isReady } = useDriverSession({ required: true })
+  const { session, isReady } = useDriverSession({ required: true, requireShift: true })
   const driver = session
     ? {
         driver_id: session.driverId,
@@ -27,7 +27,7 @@ export default function DashboardPage() {
         driver_status: session.driverStatus,
       }
     : null
-  const { data, isLoading, error, refresh } = useDriverPortalData(driver)
+  const { data, isLoading, error, refresh } = useDriverPortalData(driver, session?.selectedShiftId)
 
   const stats = useMemo(() => {
     const stops = data?.stops ?? []
@@ -46,7 +46,7 @@ export default function DashboardPage() {
     <AppShell>
       <PageHeader
         title={`Good ${new Date().getHours() < 12 ? "morning" : "afternoon"}, ${session.driverName.split(" ")[0]}`}
-        subtitle={formatLongDate(new Date())}
+        subtitle={`${formatLongDate(new Date())} • ${session.selectedShiftName ?? "Active shift"}`}
         showNotifications
       />
 

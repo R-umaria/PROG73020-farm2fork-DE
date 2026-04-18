@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.integrations.driver_service_client import DriverServiceClient
+from app.repositories.driver_portal_repository import DriverPortalRepository
 from app.repositories.planning_repository import PlanningRepository
 from app.schemas.driver import (
     DriverDayActionResponse,
@@ -29,13 +30,17 @@ class DriverService:
     ):
         self.db: Session = db or SessionLocal()
         self.repo = PlanningRepository(self.db)
+        self.portal_repo = DriverPortalRepository(self.db)
         self.client = driver_client or DriverServiceClient()
 
     def list_drivers(self) -> list[DriverSummaryResponse]:
+        local_accounts = self.portal_repo.list_driver_accounts()
+        if local_accounts:
+            return [DriverSummaryResponse(driver_id=a.driver_id, driver_name=a.driver_name, vehicle_type=a.vehicle_type, driver_status=a.driver_status) for a in local_accounts]
         return self.client.list_drivers()
 
-    def get_todays_schedule(self, driver_id: int) -> DriverScheduleResponse:
-        driver = self.client.get_driver(driver_id)
+    def get_todays_schedule(self, driver_id: int, route_group_id: UUID | None = None) -> DriverScheduleResponse:
+        driver = self._get_driver_summary(driver_id)
         stops = [
             DriverScheduleStopResponse(
                 route_stop_id=stop.id,
@@ -47,7 +52,7 @@ class DriverService:
                 estimated_arrival=stop.estimated_arrival,
                 address=self._format_stop_address(stop.delivery_request.customer_details),
             )
-            for stop in self.repo.list_driver_route_stops(driver_id)
+            for stop in self.repo.list_driver_route_stops(driver_id, route_group_id=route_group_id)
         ]
         return DriverScheduleResponse(
             driver_id=driver.driver_id,
@@ -58,7 +63,7 @@ class DriverService:
         )
 
     def start_day(self, driver_id: int) -> DriverDayActionResponse:
-        driver = self.client.get_driver(driver_id)
+        driver = self._get_driver_summary(driver_id)
         return DriverDayActionResponse(
             driver_id=driver.driver_id,
             driver_name=driver.driver_name,
@@ -79,6 +84,12 @@ class DriverService:
 
     def close(self) -> None:
         self.db.close()
+
+    def _get_driver_summary(self, driver_id: int) -> DriverSummaryResponse:
+        account = self.portal_repo.get_driver_account_by_driver_id(driver_id)
+        if account is not None:
+            return DriverSummaryResponse(driver_id=account.driver_id, driver_name=account.driver_name, vehicle_type=account.vehicle_type, driver_status=account.driver_status)
+        return self.client.get_driver(driver_id)
 
     @staticmethod
     def _format_stop_address(customer_details) -> str | None:

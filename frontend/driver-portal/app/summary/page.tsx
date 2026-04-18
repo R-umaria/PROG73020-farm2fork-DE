@@ -14,7 +14,7 @@ import { formatRouteLabel } from "@/lib/portal-formatters"
 
 export default function ShiftSummaryPage() {
   const router = useRouter()
-  const { session, isReady, signOut } = useDriverSession({ required: true })
+  const { session, isReady, signOut } = useDriverSession({ required: true, requireShift: true })
   const driver = session
     ? {
         driver_id: session.driverId,
@@ -23,7 +23,7 @@ export default function ShiftSummaryPage() {
         driver_status: session.driverStatus,
       }
     : null
-  const { data, isLoading, error, refresh } = useDriverPortalData(driver)
+  const { data, isLoading, error, refresh } = useDriverPortalData(driver, session?.selectedShiftId)
 
   const stats = useMemo(() => {
     const stops = data?.stops ?? []

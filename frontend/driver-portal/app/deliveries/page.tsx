@@ -17,7 +17,7 @@ import { formatTimeWindow } from "@/lib/portal-formatters"
 
 export default function DeliveriesPage() {
   const router = useRouter()
-  const { session, isReady } = useDriverSession({ required: true })
+  const { session, isReady } = useDriverSession({ required: true, requireShift: true })
   const [search, setSearch] = useState("")
   const driver = session
     ? {
@@ -27,7 +27,7 @@ export default function DeliveriesPage() {
         driver_status: session.driverStatus,
       }
     : null
-  const { data, isLoading, error, refresh } = useDriverPortalData(driver)
+  const { data, isLoading, error, refresh } = useDriverPortalData(driver, session?.selectedShiftId)
 
   const filteredStops = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase()

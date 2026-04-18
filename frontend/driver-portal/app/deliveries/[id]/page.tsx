@@ -36,7 +36,7 @@ export default function DeliveryDetailPage() {
   const router = useRouter()
   const params = useParams()
   const routeStopId = params.id as string
-  const { session, isReady } = useDriverSession({ required: true })
+  const { session, isReady } = useDriverSession({ required: true, requireShift: true })
   const driver = session
     ? {
         driver_id: session.driverId,
@@ -45,7 +45,7 @@ export default function DeliveryDetailPage() {
         driver_status: session.driverStatus,
       }
     : null
-  const { data, isLoading, error, refresh } = useDriverPortalData(driver)
+  const { data, isLoading, error, refresh } = useDriverPortalData(driver, session?.selectedShiftId)
   const [actionError, setActionError] = useState<string | null>(null)
   const [isMutating, setIsMutating] = useState(false)
 

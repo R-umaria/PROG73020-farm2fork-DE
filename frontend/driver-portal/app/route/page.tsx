@@ -18,7 +18,7 @@ import { formatRouteLabel, formatShortTime, formatTimeWindow } from "@/lib/porta
 
 export default function RouteOverviewPage() {
   const router = useRouter()
-  const { session, isReady } = useDriverSession({ required: true })
+  const { session, isReady } = useDriverSession({ required: true, requireShift: true })
   const driver = session
     ? {
         driver_id: session.driverId,
@@ -27,7 +27,7 @@ export default function RouteOverviewPage() {
         driver_status: session.driverStatus,
       }
     : null
-  const { data, isLoading, error, refresh } = useDriverPortalData(driver)
+  const { data, isLoading, error, refresh } = useDriverPortalData(driver, session?.selectedShiftId)
   const [routeMap, setRouteMap] = useState<RouteMapData | null>(null)
   const [routeMapError, setRouteMapError] = useState<string | null>(null)
   const [isRouteMapLoading, setIsRouteMapLoading] = useState(false)
@@ -77,7 +77,7 @@ export default function RouteOverviewPage() {
 
   return (
     <AppShell>
-      <PageHeader title="Route Overview" subtitle={formatRouteLabel(firstStop?.routeGroupId)} backHref="/dashboard" />
+      <PageHeader title="Route Overview" subtitle={session.selectedShiftName ?? formatRouteLabel(firstStop?.routeGroupId)} backHref="/dashboard" />
 
       <main className="px-4 py-6 max-w-4xl mx-auto space-y-6">
         {isLoading ? (

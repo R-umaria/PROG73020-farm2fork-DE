@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import settings
+from app.services.demo_seed_service import seed_demo_data_if_enabled
 
 app = FastAPI(title=settings.app_name, version=settings.app_version)
 
@@ -20,3 +21,7 @@ app.include_router(api_router, prefix="/api")
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.on_event("startup")
+def startup_seed_demo_data():
+    seed_demo_data_if_enabled()

@@ -92,6 +92,21 @@ class CustomerDetailsSnapshot(Base):
     delivery_request = relationship("DeliveryRequest", back_populates="customer_snapshot")
 
 
+class DriverAccount(Base):
+    __tablename__ = "driver_account"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    driver_id = Column(BigInteger, nullable=False, unique=True, index=True)
+    email = Column(String, nullable=False, unique=True, index=True)
+    driver_name = Column(String, nullable=False)
+    vehicle_type = Column(String, nullable=False)
+    driver_status = Column(String, nullable=False, default="available")
+    password_hash = Column(String, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
 class RouteGroup(Base):
     __tablename__ = "route_group"
 
