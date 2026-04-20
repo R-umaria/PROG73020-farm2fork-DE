@@ -19,6 +19,15 @@ export function useDriverSession(options: UseDriverSessionOptions = {}) {
     if (missingSession || missingShift) router.replace("/")
   }, [pathname, required, requireShift, router])
 
-  const signOut = () => { clearDriverSession(); setSession(null); router.replace("/") }
+  const signOut = () => {
+    clearDriverSession()
+    setSession(null)
+    if (typeof window !== "undefined") {
+      window.history.replaceState({}, "", "/")
+      window.location.replace("/")
+      return
+    }
+    router.replace("/")
+  }
   return { session, isReady, signOut }
 }

@@ -306,7 +306,7 @@ class PlanningService:
             sequence=0,
         )
 
-        stops = [self._build_route_waypoint(stop) for stop in routeable_stops]
+        stops = [self._build_route_waypoint(stop, geocoding_client=self.geocoding_client) for stop in routeable_stops]
         optimized_path = self._decode_route_payload(group.route_payload)
         if optimized_path:
             routing_status = "optimized"
@@ -421,12 +421,29 @@ class PlanningService:
         return routeable
 
     @staticmethod
-    def _build_route_waypoint(stop) -> RouteMapWaypoint:
+    def _build_route_waypoint(stop, geocoding_client: GeocodingClient | None = None) -> RouteMapWaypoint:
         customer_details = stop.delivery_request.customer_details
         assert customer_details is not None
+
+        latitude = float(customer_details.latitude)
+        longitude = float(customer_details.longitude)
+        if geocoding_client is not None:
+            try:
+                precise = geocoding_client.geocode_address(
+                    street=customer_details.street,
+                    city=customer_details.city,
+                    province=customer_details.province,
+                    postal_code=customer_details.postal_code,
+                    country=customer_details.country,
+                )
+                latitude = precise.latitude
+                longitude = precise.longitude
+            except (UpstreamBadResponseError, UpstreamNotFoundError, UpstreamTimeoutError):
+                pass
+
         return RouteMapWaypoint(
-            latitude=float(customer_details.latitude),
-            longitude=float(customer_details.longitude),
+            latitude=latitude,
+            longitude=longitude,
             label=customer_details.customer_name,
             address=", ".join(
                 part.strip()

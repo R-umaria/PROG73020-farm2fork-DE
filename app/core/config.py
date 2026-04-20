@@ -35,8 +35,8 @@ class Settings(BaseSettings):
     warehouse_province: str = "ON"
     warehouse_postal_code: str = "N2J 2W2"
     warehouse_country: str = "Canada"
-    warehouse_latitude: float = 43.4723000
-    warehouse_longitude: float = -80.5373000
+    warehouse_latitude: float = 43.4790290
+    warehouse_longitude: float = -80.5179320
 
     @property
     def frontend_allowed_origins_list(self) -> list[str]:
