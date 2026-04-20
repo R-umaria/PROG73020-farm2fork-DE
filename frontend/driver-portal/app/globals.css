@@ -151,3 +151,14 @@
     text-wrap: pretty;
   }
 }
+
+
+.leaflet-container {
+  z-index: 0 !important;
+}
+
+.leaflet-top,
+.leaflet-bottom,
+.leaflet-control-container {
+  z-index: 500 !important;
+}

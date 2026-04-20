@@ -25,7 +25,7 @@ export function AppShell({ children, showNav = true, className }: AppShellProps)
   return (
     <div
       className={cn(
-        "min-h-screen bg-background",
+        "relative min-h-screen bg-background",
         showNav && "pb-20",
         className,
       )}
