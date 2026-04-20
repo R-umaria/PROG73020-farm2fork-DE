@@ -1,7 +1,9 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
 
+from app.core.database import get_db
 from app.integrations.errors import (
     UpstreamBadResponseError,
     UpstreamNotFoundError,
@@ -16,7 +18,6 @@ from app.schemas.driver import (
 from app.services.driver_service import DriverService, RouteStopNotFoundError
 
 router = APIRouter()
-service = DriverService()
 
 
 @router.get(
@@ -30,7 +31,12 @@ service = DriverService()
     summary="Get the current driver's assigned route stops (v1)",
     response_description="Driver schedule view combining upstream driver roster data with locally planned route stops (v1).",
 )
-def get_todays_schedule(driver_id: int, route_group_id: UUID | None = Query(default=None)):
+def get_todays_schedule(
+    driver_id: int,
+    route_group_id: UUID | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    service = DriverService(db)
     try:
         return service.get_todays_schedule(driver_id, route_group_id=route_group_id)
     except UpstreamNotFoundError as exc:
@@ -39,6 +45,8 @@ def get_todays_schedule(driver_id: int, route_group_id: UUID | None = Query(defa
         raise HTTPException(status_code=504, detail=str(exc)) from exc
     except UpstreamBadResponseError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    finally:
+        service.close()
 
 
 @router.post(
@@ -52,7 +60,8 @@ def get_todays_schedule(driver_id: int, route_group_id: UUID | None = Query(defa
     summary="Acknowledge driver day start (v1)",
     response_description="A lightweight driver-day acknowledgement using the explicit v1 driver contract.",
 )
-def start_day(driver_id: int):
+def start_day(driver_id: int, db: Session = Depends(get_db)):
+    service = DriverService(db)
     try:
         return service.start_day(driver_id)
     except UpstreamNotFoundError as exc:
@@ -61,6 +70,8 @@ def start_day(driver_id: int):
         raise HTTPException(status_code=504, detail=str(exc)) from exc
     except UpstreamBadResponseError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    finally:
+        service.close()
 
 
 @router.post(
@@ -70,11 +81,14 @@ def start_day(driver_id: int):
     summary="Mark a route stop completed (v1)",
     response_description="Updates the local route-stop read model using the explicit v1 stop contract.",
 )
-def complete_stop(route_stop_id: UUID):
+def complete_stop(route_stop_id: UUID, db: Session = Depends(get_db)):
+    service = DriverService(db)
     try:
         return service.complete_stop(route_stop_id)
     except RouteStopNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    finally:
+        service.close()
 
 
 @router.get(
@@ -88,7 +102,8 @@ def complete_stop(route_stop_id: UUID):
     summary="Compatibility alias for the v1 driver roster contract",
     response_description="Compatibility alias for `/api/drivers/`; consumers should prefer the plural collection route moving forward.",
 )
-def list_drivers_alias():
+def list_drivers_alias(db: Session = Depends(get_db)):
+    service = DriverService(db)
     try:
         return service.list_drivers()
     except UpstreamNotFoundError as exc:
@@ -97,3 +112,5 @@ def list_drivers_alias():
         raise HTTPException(status_code=504, detail=str(exc)) from exc
     except UpstreamBadResponseError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    finally:
+        service.close()

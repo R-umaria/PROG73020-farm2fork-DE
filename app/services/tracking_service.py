@@ -30,9 +30,6 @@ class TrackingService:
     def get_status(self, order_id: int) -> DeliveryStatusResponse | None:
         """Return the persisted tracking view for an order, if one exists."""
 
-        # Route modules keep service instances alive, so expire the current session
-        # before building the read model to avoid stale execution/status data.
-        self.db.expire_all()
         delivery_request = self.repo.get_tracking_context_by_order_id(order_id)
         if delivery_request is None or delivery_request.execution is None:
             return None
@@ -56,7 +53,7 @@ class TrackingService:
             delivery_status=normalize_delivery_execution_status(execution.current_status),
             latest_status_at=self._ensure_utc(latest_history.changed_at) if latest_history is not None else None,
             latest_status_reason=latest_history.reason if latest_history is not None else None,
-            route_group_id=route_group.id if route_group is not None else None,
+            route_group_id=route_stop.route_group_id if route_stop is not None else None,
             route_group_status=route_group.status if route_group is not None else None,
             route_stop_id=route_stop.id if route_stop is not None else None,
             stop_sequence=route_stop.sequence if route_stop is not None else None,

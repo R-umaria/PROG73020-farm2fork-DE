@@ -8,8 +8,8 @@ from app.schemas.delivery import DeliveryCreate
 
 
 class DeliveryService:
-    def __init__(self):
-        self.db: Session = SessionLocal()
+    def __init__(self, db: Session | None = None):
+        self.db: Session = db or SessionLocal()
         self.repo = DeliveryRequestRepository(self.db)
 
     def list_deliveries(self):
@@ -30,3 +30,6 @@ class DeliveryService:
             },
             items=[item.model_dump() for item in payload.items],
         )
+
+    def close(self) -> None:
+        self.db.close()

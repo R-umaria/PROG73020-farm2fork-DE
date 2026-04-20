@@ -1,7 +1,9 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy.orm import Session
 
+from app.core.database import get_db
 from app.integrations.errors import (
     UpstreamBadResponseError,
     UpstreamNotFoundError,
@@ -19,7 +21,6 @@ from app.services.intake_service import (
 )
 
 router = APIRouter()
-service = IntakeService()
 
 
 @router.post(
@@ -34,17 +35,18 @@ service = IntakeService()
     summary="Accept delivery request intake (v1)",
     response_description="Delivery request accepted by the intake contract (v1).",
 )
-def create_delivery_request(payload: DeliveryRequestCreate, response: Response):
+def create_delivery_request(payload: DeliveryRequestCreate, response: Response, db: Session = Depends(get_db)):
+    service = IntakeService(db)
     try:
         intake_response = service.receive_delivery_request(payload)
+        message = intake_response.message if hasattr(intake_response, "message") else intake_response.get("message")
+        if message == "Delivery request already received (v1)":
+            response.status_code = status.HTTP_200_OK
+        return intake_response
     except IntakeConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-    message = intake_response.message if hasattr(intake_response, "message") else intake_response.get("message")
-    if message == "Delivery request already received (v1)":
-        response.status_code = status.HTTP_200_OK
-
-    return intake_response
+    finally:
+        service.close()
 
 
 @router.post(
@@ -58,7 +60,8 @@ def create_delivery_request(payload: DeliveryRequestCreate, response: Response):
     summary="Fetch customer details and geocode the address (v1)",
     response_description="Customer enrichment and geocode snapshot saved against the delivery request (v1).",
 )
-def sync_customer_details(delivery_request_id: UUID):
+def sync_customer_details(delivery_request_id: UUID, db: Session = Depends(get_db)):
+    service = IntakeService(db)
     try:
         return service.sync_customer_details(delivery_request_id)
     except DeliveryRequestNotFoundError as exc:
@@ -69,3 +72,5 @@ def sync_customer_details(delivery_request_id: UUID):
         raise HTTPException(status_code=504, detail=str(exc)) from exc
     except UpstreamBadResponseError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    finally:
+        service.close()
