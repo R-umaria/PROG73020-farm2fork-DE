@@ -15,7 +15,18 @@ export interface DeliveryCustomerDetails { customer_name: string; phone_number: 
 export interface DeliveryRecord { id: string; order_id: number; customer_id: number; request_timestamp: string; request_status: string; created_at: string | null; updated_at: string | null; items: DeliveryItem[]; customer_details?: DeliveryCustomerDetails | null }
 export interface DeliveryStatusHistoryEntry { status: DeliveryStatus; changed_at: string; changed_by?: string | null; reason?: string | null }
 export interface DeliveryTracking { order_id: number; customer_id: number | null; delivery_request_id: string | null; delivery_execution_id: string; delivery_status: DeliveryStatus; latest_status_at: string | null; latest_status_reason: string | null; route_group_id: string | null; route_group_status: string | null; route_stop_id: string | null; stop_sequence: number | null; stop_status: string | null; estimated_arrival: string | null; assigned_driver_id: number | null; assignment_status: string | null; dispatched_at: string | null; out_for_delivery_at: string | null; completed_at: string | null; failed_at: string | null; status_history: DeliveryStatusHistoryEntry[] }
-function getApiBaseUrl(): string { const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim(); return (configuredBaseUrl || DEFAULT_API_BASE_URL).replace(/\/$/, "") }
+
+function inferBrowserApiBaseUrl(): string | null {
+  if (typeof window === "undefined") return null
+  const { protocol, hostname } = window.location
+  return `${protocol}//${hostname}:8000`
+}
+
+function getApiBaseUrl(): string {
+  const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim()
+  return (configuredBaseUrl || inferBrowserApiBaseUrl() || DEFAULT_API_BASE_URL).replace(/\/$/, "")
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> { const response = await fetch(`${getApiBaseUrl()}${path}`, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers || {}) }, cache: "no-store" }); if (!response.ok) { let message = `Request failed with HTTP ${response.status}`; try { const payload = await response.json(); if (typeof payload?.detail === "string") message = payload.detail } catch {} const error = new Error(message) as ApiError; error.status = response.status; throw error } return response.json() as Promise<T> }
 export const resolveDriverSession = (token: string) => apiFetch<DriverAuthSession>("/api/driver-auth/session", { method: "POST", body: JSON.stringify({ token }) })
 export const listAvailableShifts = () => apiFetch<AvailableShift[]>("/api/shifts/available")

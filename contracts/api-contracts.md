@@ -2,6 +2,12 @@
 
 Keep this file updated whenever request/response shapes change.
 
+## Deployment compatibility update (2026-04)
+- The intake endpoint now accepts both the original snake_case payload and the Order Orchestration camelCase sample payload.
+- Compatibility aliases also exist at `POST /api/delivery-requests/manifest` and `POST /api/delivery-requests/order-manifest`.
+- Pickup manifests are normalized to `order_type=pickup` and create a `ready_for_pickup` execution path.
+- Delivery intake can auto-sync customer details and auto-schedule route groups when those settings are enabled.
+
 ## Versioning note
 The routes remain under the existing `/api` path structure. The request and response shapes documented below are the explicit **v1** contracts.
 

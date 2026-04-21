@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.core.delivery_status import DeliveryExecutionStatus
 from app.integrations.customer_module_client import CustomerModuleClient
 from app.integrations.errors import (
     UpstreamBadResponseError,
@@ -17,7 +18,10 @@ from app.integrations.errors import (
 from app.integrations.geocoding_client import GeocodingClient
 from app.repositories.customer_repository import CustomerRepository
 from app.repositories.delivery_request_repository import DeliveryRequestRepository
+from app.repositories.execution_repository import ExecutionRepository
 from app.schemas.intake import CustomerSyncResponse, DeliveryRequestCreate, IntakeResponse
+from app.services.planning_service import PlanningService
+from app.core.config import settings
 
 
 class IntakeConflictError(ValueError):
@@ -39,11 +43,12 @@ class IntakeService:
         self.db: Session = db or SessionLocal()
         self.repo = DeliveryRequestRepository(self.db)
         self.customer_repo = CustomerRepository(self.db)
+        self.execution_repo = ExecutionRepository(self.db)
         self.customer_client = customer_client or CustomerModuleClient()
         self.geocoding_client = geocoding_client or GeocodingClient()
 
     def receive_delivery_request(self, payload: DeliveryRequestCreate) -> IntakeResponse:
-        raw_payload = payload.model_dump(mode="json")
+        raw_payload = self._normalized_request_snapshot(payload)
         existing = self.repo.get_by_order_id(payload.order_id)
 
         if existing is not None:
@@ -60,6 +65,9 @@ class IntakeService:
                 order_id=existing.order_id,
                 request_status="received",
                 delivery_request_id=existing.id,
+                order_type=payload.order_type,
+                auto_sync_status="already_processed",
+                auto_schedule_status="already_processed",
             )
 
         delivery_request = self.repo.create_delivery_request(
@@ -71,11 +79,59 @@ class IntakeService:
             items=[item.model_dump() for item in payload.items],
         )
 
+        auto_sync_status = "skipped"
+        auto_schedule_status = "skipped"
+
+        if payload.order_type == "pickup":
+            if self.execution_repo.get_by_delivery_request_id(delivery_request.id) is None:
+                self.execution_repo.create_execution(
+                    delivery_request_id=delivery_request.id,
+                    current_status=DeliveryExecutionStatus.READY_FOR_PICKUP,
+                )
+            auto_sync_status = "not_required"
+            auto_schedule_status = "not_required"
+        else:
+            if self.execution_repo.get_by_delivery_request_id(delivery_request.id) is None:
+                self.execution_repo.create_execution(
+                    delivery_request_id=delivery_request.id,
+                    current_status=DeliveryExecutionStatus.SCHEDULED,
+                )
+
+            if settings.intake_auto_sync_customer:
+                try:
+                    self.sync_customer_details(delivery_request.id)
+                    auto_sync_status = "completed"
+                except (
+                    DeliveryRequestNotFoundError,
+                    UpstreamBadResponseError,
+                    UpstreamNotFoundError,
+                    UpstreamTimeoutError,
+                    ValueError,
+                ):
+                    auto_sync_status = "failed"
+            else:
+                auto_sync_status = "disabled"
+
+            if settings.intake_auto_schedule and auto_sync_status == "completed":
+                try:
+                    planning = PlanningService(self.db)
+                    planning.schedule_routes()
+                    auto_schedule_status = "completed"
+                except Exception:
+                    auto_schedule_status = "failed"
+            elif settings.intake_auto_schedule:
+                auto_schedule_status = "blocked"
+            else:
+                auto_schedule_status = "disabled"
+
         return IntakeResponse(
             message="Delivery request persisted (v1)",
             order_id=delivery_request.order_id,
             request_status="received",
             delivery_request_id=delivery_request.id,
+            order_type=payload.order_type,
+            auto_sync_status=auto_sync_status,
+            auto_schedule_status=auto_schedule_status,
         )
 
     def sync_customer_details(self, delivery_request_id: UUID) -> CustomerSyncResponse:
@@ -124,7 +180,7 @@ class IntakeService:
 
     def close(self) -> None:
         self.db.close()
-    
+
     @staticmethod
     def _normalize_text(value: str) -> str:
         return " ".join(value.strip().split())
@@ -136,6 +192,23 @@ class IntakeService:
             return f"{cleaned[:3]} {cleaned[3:]}"
         return cleaned
 
+    def _normalized_request_snapshot(self, payload: DeliveryRequestCreate) -> dict[str, Any]:
+        return {
+            "order_id": payload.order_id,
+            "customer_id": payload.customer_id,
+            "request_timestamp": payload.request_timestamp.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+            "order_type": payload.order_type,
+            "pickup": payload.order_type == "pickup",
+            "items": [
+                {
+                    "external_item_id": item.external_item_id,
+                    "item_name": item.item_name,
+                    "quantity": item.quantity,
+                }
+                for item in payload.items
+            ],
+        }
+
     def _canonicalize_existing_request(self, existing) -> dict[str, Any]:
         if existing.request_snapshot is not None:
             return self._canonicalize_payload(existing.request_snapshot.request_payload)
@@ -145,6 +218,7 @@ class IntakeService:
                 "order_id": existing.order_id,
                 "customer_id": existing.customer_id,
                 "request_timestamp": existing.request_timestamp,
+                "order_type": "delivery",
                 "items": [
                     {
                         "external_item_id": item.external_item_id,
@@ -186,9 +260,14 @@ class IntakeService:
         else:
             normalized_timestamp = request_timestamp.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
+        order_type = str(payload.get("order_type") or ("pickup" if payload.get("pickup") else "delivery")).strip().lower()
+        if order_type not in {"delivery", "pickup"}:
+            order_type = "delivery"
+
         return {
             "order_id": int(payload["order_id"]),
             "customer_id": int(payload["customer_id"]),
             "request_timestamp": normalized_timestamp,
+            "order_type": order_type,
             "items": canonical_items,
         }

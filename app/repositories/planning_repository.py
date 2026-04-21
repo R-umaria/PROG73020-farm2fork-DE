@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func
@@ -100,6 +101,9 @@ class PlanningRepository:
                 selectinload(RouteGroup.stops)
                 .selectinload(RouteStop.delivery_request)
                 .selectinload(DeliveryRequest.customer_details),
+                selectinload(RouteGroup.stops)
+                .selectinload(RouteStop.delivery_request)
+                .selectinload(DeliveryRequest.execution),
                 selectinload(RouteGroup.driver_assignments),
             )
             .filter(RouteGroup.id == route_group_id)
@@ -138,7 +142,8 @@ class PlanningRepository:
         stop = (
             self.db.query(RouteStop)
             .options(
-                selectinload(RouteStop.route_group),
+                selectinload(RouteStop.route_group).selectinload(RouteGroup.stops),
+                selectinload(RouteStop.route_group).selectinload(RouteGroup.driver_assignments),
                 selectinload(RouteStop.delivery_request).selectinload(DeliveryRequest.customer_details),
             )
             .filter(RouteStop.id == route_stop_id)
@@ -148,6 +153,14 @@ class PlanningRepository:
             return None
 
         stop.stop_status = stop_status
+        group = stop.route_group
+        if group is not None and group.stops:
+            if all(str(route_stop.stop_status).lower() == "completed" for route_stop in group.stops):
+                group.status = "completed"
+                for assignment in group.driver_assignments:
+                    if assignment.assignment_status in {"assigned", "accepted"}:
+                        assignment.assignment_status = "completed"
+                        assignment.unassigned_at = assignment.unassigned_at or datetime.now(tz=UTC)
         self.db.commit()
         self.db.refresh(stop)
         return stop
@@ -185,3 +198,36 @@ class PlanningRepository:
         self.db.commit()
         self.db.refresh(stop)
         return stop
+
+    def list_route_groups_count(self) -> int:
+        return int(
+            self.db.query(RouteGroup)
+            .filter(RouteGroup.status.in_(["draft", "scheduled", "in_progress"]))
+            .count()
+        )
+
+    def find_open_group_for_planning(self, *, group_key: str, capacity: int) -> RouteGroup | None:
+        normalized_group_key = group_key.replace(" ", "_")
+        return (
+            self.db.query(RouteGroup)
+            .options(
+                selectinload(RouteGroup.stops)
+                .selectinload(RouteStop.delivery_request)
+                .selectinload(DeliveryRequest.customer_details),
+                selectinload(RouteGroup.driver_assignments),
+            )
+            .filter(RouteGroup.status == "scheduled")
+            .filter(RouteGroup.name.like(f"route-group:{normalized_group_key}:%"))
+            .filter(RouteGroup.total_stops < capacity)
+            .order_by(RouteGroup.scheduled_date.asc(), RouteGroup.created_at.asc())
+            .first()
+        )
+
+    def update_route_group_total_stops(self, *, route_group_id: UUID, total_stops: int) -> RouteGroup | None:
+        group = self.db.query(RouteGroup).filter(RouteGroup.id == route_group_id).first()
+        if group is None:
+            return None
+        group.total_stops = total_stops
+        self.db.commit()
+        self.db.refresh(group)
+        return group

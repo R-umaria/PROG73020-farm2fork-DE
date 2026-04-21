@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 from datetime import UTC, datetime
+
 from app.schemas.auth import DriverJwtPayload
 
 
@@ -34,13 +35,22 @@ def decode_driver_jwt(token: str) -> DriverJwtPayload:
     email = str(payload_data.get('email') or payload_data.get('sub') or payload_data.get('username') or '').strip().lower()
     user_type = str(payload_data.get('user_type') or payload_data.get('role') or '').strip().lower()
     exp = payload_data.get('exp')
+    subject_id = payload_data.get('id') or payload_data.get('user_id') or payload_data.get('customer_id')
+    name = payload_data.get('name') or payload_data.get('full_name')
+
     if exp is not None:
         try:
             exp = int(exp)
         except (TypeError, ValueError) as exc:
             raise DriverTokenError("JWT exp claim must be an integer timestamp") from exc
 
-    payload = DriverJwtPayload(email=email, user_type=user_type, exp=exp)
+    if subject_id is not None:
+        try:
+            subject_id = int(subject_id)
+        except (TypeError, ValueError):
+            subject_id = None
+
+    payload = DriverJwtPayload(email=email, user_type=user_type, exp=exp, subject_id=subject_id, name=name)
     if payload.exp is not None:
         expires_at = datetime.fromtimestamp(payload.exp, tz=UTC)
         if expires_at < datetime.now(tz=UTC):

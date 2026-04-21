@@ -65,8 +65,8 @@ class CustomerModuleClient:
             raise UpstreamBadResponseError("Customer & Subscriptions returned invalid JSON") from exc
 
         try:
-            return CustomerRecord.model_validate(payload)
-        except ValidationError as exc:
+            return self._normalize_customer_record(payload, requested_customer_id=customer_id)
+        except (ValidationError, ValueError, TypeError) as exc:
             raise UpstreamBadResponseError(
                 "Customer & Subscriptions returned an invalid customer response"
             ) from exc
@@ -89,3 +89,110 @@ class CustomerModuleClient:
             raise UpstreamTimeoutError("Customer & Subscriptions request timed out") from exc
         except httpx.HTTPError as exc:
             raise UpstreamBadResponseError("Customer & Subscriptions request failed") from exc
+
+    @classmethod
+    def _normalize_customer_record(cls, payload: Any, *, requested_customer_id: int) -> CustomerRecord:
+        if not isinstance(payload, dict):
+            raise ValueError("Customer payload must be an object")
+
+        customer_id = cls._coerce_int(
+            payload.get("customer_id")
+            or payload.get("customerId")
+            or payload.get("id")
+            or requested_customer_id
+        )
+
+        customer_name = cls._coerce_text(
+            payload.get("customer_name")
+            or payload.get("customerName")
+            or payload.get("name")
+            or payload.get("full_name")
+        )
+        phone_number = cls._coerce_text(
+            payload.get("phone_number")
+            or payload.get("phoneNumber")
+            or payload.get("phone")
+            or payload.get("mobile")
+            or payload.get("mobile_number")
+        )
+
+        address_payload = cls._extract_address_payload(payload)
+        address = CustomerAddress.model_validate(address_payload)
+        return CustomerRecord(
+            customer_id=customer_id,
+            customer_name=customer_name,
+            phone_number=phone_number,
+            address=address,
+        )
+
+    @classmethod
+    def _extract_address_payload(cls, payload: dict[str, Any]) -> dict[str, Any]:
+        address = payload.get("address")
+        if not isinstance(address, dict):
+            address = payload.get("default_delivery_address")
+        if not isinstance(address, dict):
+            address = payload.get("defaultDeliveryAddress")
+        if not isinstance(address, dict):
+            address = payload.get("delivery_address")
+        if not isinstance(address, dict):
+            address = payload.get("deliveryAddress")
+        if not isinstance(address, dict):
+            address = payload
+
+        address_text = payload.get("address") if isinstance(payload.get("address"), str) else None
+        street = cls._coerce_text(
+            address.get("street")
+            or address.get("street1")
+            or address.get("street_1")
+            or address.get("address1")
+            or address.get("address_line_1")
+            or address.get("line1")
+            or payload.get("street")
+            or address_text
+        )
+
+        city = cls._coerce_text(
+            address.get("city")
+            or payload.get("city")
+        )
+        province = cls._coerce_text(
+            address.get("province")
+            or address.get("state")
+            or address.get("region")
+            or payload.get("province")
+            or payload.get("state")
+        )
+        postal_code = cls._coerce_text(
+            address.get("postal_code")
+            or address.get("postalCode")
+            or address.get("zip")
+            or address.get("zip_code")
+            or address.get("zipCode")
+            or payload.get("postal_code")
+            or payload.get("postalCode")
+        )
+        country = cls._coerce_text(
+            address.get("country")
+            or address.get("country_code")
+            or payload.get("country")
+            or payload.get("country_code")
+            or settings.geocoding_default_country
+        )
+
+        return {
+            "street": street,
+            "city": city,
+            "province": province,
+            "postal_code": postal_code,
+            "country": country,
+        }
+
+    @staticmethod
+    def _coerce_text(value: Any) -> str:
+        if value is None:
+            return ""
+        return " ".join(str(value).strip().split())
+
+    @staticmethod
+    def _coerce_int(value: Any) -> int:
+        return int(value)

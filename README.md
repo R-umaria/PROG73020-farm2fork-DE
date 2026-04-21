@@ -72,7 +72,7 @@ DRIVER_SERVICE_ENABLE_DEV_FALLBACK=true
 
 Frontend environment:
 ```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+NEXT_PUBLIC_API_BASE_URL=
 ```
 
-The backend allows requests from `http://localhost:3000` by default through `FRONTEND_ALLOWED_ORIGINS`.
+Set `FRONTEND_ALLOWED_ORIGINS=*` for first deployment or explicitly list your frontend origin(s). The frontend can now infer the backend URL from the browser host when `NEXT_PUBLIC_API_BASE_URL` is blank.

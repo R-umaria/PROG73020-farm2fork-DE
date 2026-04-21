@@ -5,6 +5,7 @@ from enum import Enum
 
 class DeliveryExecutionStatus(str, Enum):
     SCHEDULED = "scheduled"
+    READY_FOR_PICKUP = "ready_for_pickup"
     OUT_FOR_DELIVERY = "out_for_delivery"
     DELIVERED = "delivered"
     FAILED = "failed"
@@ -12,17 +13,16 @@ class DeliveryExecutionStatus(str, Enum):
 
 _DELIVERY_STATUS_ALIASES: dict[str, DeliveryExecutionStatus] = {
     DeliveryExecutionStatus.SCHEDULED.value: DeliveryExecutionStatus.SCHEDULED,
-    "scheduled": DeliveryExecutionStatus.SCHEDULED,
     "schedule": DeliveryExecutionStatus.SCHEDULED,
+    DeliveryExecutionStatus.READY_FOR_PICKUP.value: DeliveryExecutionStatus.READY_FOR_PICKUP,
+    "available_for_pickup": DeliveryExecutionStatus.READY_FOR_PICKUP,
+    "picked_up": DeliveryExecutionStatus.READY_FOR_PICKUP,
     DeliveryExecutionStatus.OUT_FOR_DELIVERY.value: DeliveryExecutionStatus.OUT_FOR_DELIVERY,
     "out for delivery": DeliveryExecutionStatus.OUT_FOR_DELIVERY,
     "out-for-delivery": DeliveryExecutionStatus.OUT_FOR_DELIVERY,
-    "out_for_delivery": DeliveryExecutionStatus.OUT_FOR_DELIVERY,
     DeliveryExecutionStatus.DELIVERED.value: DeliveryExecutionStatus.DELIVERED,
-    "delivered": DeliveryExecutionStatus.DELIVERED,
     "completed": DeliveryExecutionStatus.DELIVERED,
     DeliveryExecutionStatus.FAILED.value: DeliveryExecutionStatus.FAILED,
-    "failed": DeliveryExecutionStatus.FAILED,
     "exception": DeliveryExecutionStatus.FAILED,
 }
 
@@ -30,6 +30,10 @@ _DELIVERY_STATUS_ALIASES: dict[str, DeliveryExecutionStatus] = {
 ALLOWED_DELIVERY_STATUS_TRANSITIONS: dict[DeliveryExecutionStatus, set[DeliveryExecutionStatus]] = {
     DeliveryExecutionStatus.SCHEDULED: {
         DeliveryExecutionStatus.OUT_FOR_DELIVERY,
+        DeliveryExecutionStatus.FAILED,
+    },
+    DeliveryExecutionStatus.READY_FOR_PICKUP: {
+        DeliveryExecutionStatus.DELIVERED,
         DeliveryExecutionStatus.FAILED,
     },
     DeliveryExecutionStatus.OUT_FOR_DELIVERY: {
@@ -60,20 +64,14 @@ class InvalidStatusTransitionError(ValueError):
         self.new_status = normalized_new_status
 
 
-def normalize_delivery_execution_status(
-    value: str | DeliveryExecutionStatus,
-) -> DeliveryExecutionStatus:
-    if isinstance(value, DeliveryExecutionStatus):
-        return value
+def normalize_delivery_execution_status(status: str | DeliveryExecutionStatus) -> DeliveryExecutionStatus:
+    if isinstance(status, DeliveryExecutionStatus):
+        return status
 
-    normalized_value = value.strip().lower().replace("-", "_")
-    normalized_value = " ".join(normalized_value.split())
-    normalized_value = normalized_value.replace(" ", "_")
-
-    try:
-        return _DELIVERY_STATUS_ALIASES[normalized_value]
-    except KeyError as exc:
-        raise ValueError(f"Unknown delivery execution status: {value}") from exc
+    normalized_key = str(status).strip().lower()
+    if normalized_key not in _DELIVERY_STATUS_ALIASES:
+        raise ValueError(f"Unsupported delivery execution status: {status}")
+    return _DELIVERY_STATUS_ALIASES[normalized_key]
 
 
 def validate_delivery_execution_transition(

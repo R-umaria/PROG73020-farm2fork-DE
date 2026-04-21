@@ -23,6 +23,20 @@ from app.services.intake_service import (
 router = APIRouter()
 
 
+def _create_delivery_request(payload: DeliveryRequestCreate, response: Response, db: Session) -> IntakeResponse:
+    service = IntakeService(db)
+    try:
+        intake_response = service.receive_delivery_request(payload)
+        message = intake_response.message if hasattr(intake_response, "message") else intake_response.get("message")
+        if message == "Delivery request already received (v1)":
+            response.status_code = status.HTTP_200_OK
+        return intake_response
+    except IntakeConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    finally:
+        service.close()
+
+
 @router.post(
     "/",
     response_model=IntakeResponse,
@@ -36,17 +50,17 @@ router = APIRouter()
     response_description="Delivery request accepted by the intake contract (v1).",
 )
 def create_delivery_request(payload: DeliveryRequestCreate, response: Response, db: Session = Depends(get_db)):
-    service = IntakeService(db)
-    try:
-        intake_response = service.receive_delivery_request(payload)
-        message = intake_response.message if hasattr(intake_response, "message") else intake_response.get("message")
-        if message == "Delivery request already received (v1)":
-            response.status_code = status.HTTP_200_OK
-        return intake_response
-    except IntakeConflictError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    finally:
-        service.close()
+    return _create_delivery_request(payload, response, db)
+
+
+@router.post("/manifest", response_model=IntakeResponse, response_model_exclude_none=True, status_code=201)
+def create_delivery_request_manifest_alias(payload: DeliveryRequestCreate, response: Response, db: Session = Depends(get_db)):
+    return _create_delivery_request(payload, response, db)
+
+
+@router.post("/order-manifest", response_model=IntakeResponse, response_model_exclude_none=True, status_code=201)
+def create_delivery_request_order_manifest_alias(payload: DeliveryRequestCreate, response: Response, db: Session = Depends(get_db)):
+    return _create_delivery_request(payload, response, db)
 
 
 @router.post(

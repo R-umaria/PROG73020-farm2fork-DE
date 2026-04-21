@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.core.delivery_status import INITIAL_DELIVERY_EXECUTION_STATUS
+from app.core.delivery_status import DeliveryExecutionStatus, INITIAL_DELIVERY_EXECUTION_STATUS
 from app.integrations.errors import UpstreamBadResponseError, UpstreamNotFoundError, UpstreamTimeoutError
 from app.integrations.geocoding_client import GeocodingClient
 from app.integrations.osrm_client import OsrmClient
@@ -166,80 +167,101 @@ class PlanningService:
     def schedule_routes(self) -> ScheduleRoutesResponse:
         grouped_backlog = self.group_backlog()
         scheduled_groups: list[ScheduledRouteGroup] = []
+        next_route_index = self.repo.list_route_groups_count()
 
         for planning_group in grouped_backlog.groups:
-            first_candidate = planning_group.candidates[0]
-            scheduled_date = first_candidate.request_timestamp
-            route_group = self.repo.create_route_group(
-                name=self._route_group_name(planning_group.group_key, scheduled_date),
-                scheduled_date=scheduled_date,
-                status="scheduled",
-                zone_code=planning_group.region_key,
-                total_stops=planning_group.request_count,
-            )
-
-            scheduled_stops: list[ScheduledRouteStop] = []
-            for index, candidate in enumerate(planning_group.candidates, start=1):
-                estimated_arrival = scheduled_date + timedelta(minutes=15 * (index - 1))
-                route_stop = self.repo.add_route_stop(
-                    route_group_id=route_group.id,
-                    delivery_request_id=candidate.delivery_request_id,
-                    sequence=index,
-                    estimated_arrival=estimated_arrival,
-                    stop_status="planned",
-                )
-                scheduled_stops.append(
-                    ScheduledRouteStop(
-                        route_stop_id=route_stop.id,
-                        delivery_request_id=candidate.delivery_request_id,
-                        order_id=candidate.order_id,
-                        sequence=index,
-                        stop_status=route_stop.stop_status,
-                        estimated_arrival=estimated_arrival,
-                    )
-                )
-
-            selected_driver = self.driver_assignment_policy.select_driver(self.repo.get_active_driver_loads())
-            driver_assignment = None
-            if selected_driver is not None:
-                assignment = self.repo.assign_driver(
-                    route_group_id=route_group.id,
-                    driver_id=selected_driver.driver.id,
-                    assignment_status="assigned",
-                )
-                driver_assignment = ScheduledDriverAssignment(
-                    driver_id=assignment.driver_id,
-                    driver_name=selected_driver.driver.name,
-                    vehicle_type=selected_driver.driver.vehicle_type,
-                    driver_status=selected_driver.driver.status,
-                    assignment_status=assignment.assignment_status,
-                    current_load_before_assignment=selected_driver.current_load,
-                )
-
-            for candidate in planning_group.candidates:
-                existing_execution = self.execution_repo.get_by_delivery_request_id(candidate.delivery_request_id)
-                if existing_execution is None:
-                    self.execution_repo.create_execution(
-                        delivery_request_id=candidate.delivery_request_id,
-                        current_status=INITIAL_DELIVERY_EXECUTION_STATUS,
-                    )
-
-            self.optimize_route_group(route_group.id)
-
-            scheduled_groups.append(
-                ScheduledRouteGroup(
-                    route_group_id=route_group.id,
+            chunked_candidates = self._chunk_candidates(planning_group.candidates, settings.planning_max_orders_per_route)
+            for chunk_number, candidate_chunk in enumerate(chunked_candidates, start=1):
+                open_group = self.repo.find_open_group_for_planning(
                     group_key=planning_group.group_key,
-                    route_group_name=route_group.name,
-                    handling_type=planning_group.handling_type,
-                    zone_code=route_group.zone_code,
-                    scheduled_date=route_group.scheduled_date,
-                    route_group_status=route_group.status,
-                    total_stops=route_group.total_stops,
-                    driver_assignment=driver_assignment,
-                    stops=scheduled_stops,
+                    capacity=settings.planning_max_orders_per_route,
                 )
-            )
+                if open_group is not None:
+                    route_group = open_group
+                    scheduled_date = route_group.scheduled_date
+                    starting_sequence = len(route_group.stops) + 1
+                else:
+                    next_route_index += 1
+                    first_candidate = candidate_chunk[0]
+                    scheduled_date = self._scheduled_slot_for_route_index(first_candidate.request_timestamp, next_route_index - 1)
+                    route_group = self.repo.create_route_group(
+                        name=self._route_group_name(planning_group.group_key, scheduled_date, chunk_number),
+                        scheduled_date=scheduled_date,
+                        status="scheduled",
+                        zone_code=planning_group.region_key,
+                        total_stops=0,
+                    )
+                    starting_sequence = 1
+
+                scheduled_stops: list[ScheduledRouteStop] = []
+                for index, candidate in enumerate(candidate_chunk, start=starting_sequence):
+                    offset_index = index - 1
+                    estimated_arrival = scheduled_date + timedelta(minutes=15 * offset_index)
+                    route_stop = self.repo.add_route_stop(
+                        route_group_id=route_group.id,
+                        delivery_request_id=candidate.delivery_request_id,
+                        sequence=index,
+                        estimated_arrival=estimated_arrival,
+                        stop_status="planned",
+                    )
+                    scheduled_stops.append(
+                        ScheduledRouteStop(
+                            route_stop_id=route_stop.id,
+                            delivery_request_id=candidate.delivery_request_id,
+                            order_id=candidate.order_id,
+                            sequence=index,
+                            stop_status=route_stop.stop_status,
+                            estimated_arrival=estimated_arrival,
+                        )
+                    )
+
+                route_group = self.repo.update_route_group_total_stops(
+                    route_group_id=route_group.id,
+                    total_stops=(route_group.total_stops or 0) + len(candidate_chunk),
+                ) or route_group
+
+                driver_assignment = None
+                if settings.planning_auto_assign_drivers:
+                    selected_driver = self.driver_assignment_policy.select_driver(self.repo.get_active_driver_loads())
+                    if selected_driver is not None:
+                        assignment = self.repo.assign_driver(
+                            route_group_id=route_group.id,
+                            driver_id=selected_driver.driver.id,
+                            assignment_status="assigned",
+                        )
+                        driver_assignment = ScheduledDriverAssignment(
+                            driver_id=assignment.driver_id,
+                            driver_name=selected_driver.driver.name,
+                            vehicle_type=selected_driver.driver.vehicle_type,
+                            driver_status=selected_driver.driver.status,
+                            assignment_status=assignment.assignment_status,
+                            current_load_before_assignment=selected_driver.current_load,
+                        )
+
+                for candidate in candidate_chunk:
+                    existing_execution = self.execution_repo.get_by_delivery_request_id(candidate.delivery_request_id)
+                    if existing_execution is None:
+                        self.execution_repo.create_execution(
+                            delivery_request_id=candidate.delivery_request_id,
+                            current_status=INITIAL_DELIVERY_EXECUTION_STATUS,
+                        )
+
+                self.optimize_route_group(route_group.id)
+
+                scheduled_groups.append(
+                    ScheduledRouteGroup(
+                        route_group_id=route_group.id,
+                        group_key=planning_group.group_key,
+                        route_group_name=route_group.name,
+                        handling_type=planning_group.handling_type,
+                        zone_code=route_group.zone_code,
+                        scheduled_date=route_group.scheduled_date,
+                        route_group_status=route_group.status,
+                        total_stops=route_group.total_stops,
+                        driver_assignment=driver_assignment,
+                        stops=scheduled_stops,
+                    )
+                )
 
         assigned_group_count = sum(1 for group in scheduled_groups if group.driver_assignment is not None)
         unassigned_group_count = len(scheduled_groups) - assigned_group_count
@@ -309,7 +331,6 @@ class PlanningService:
             (stop, self._build_route_waypoint(stop, geocoding_client=self.geocoding_client))
             for stop in routeable_stops
         ]
-        stops = [waypoint for _, waypoint in stop_pairs]
 
         active_origin, active_stop, active_sequence = self._determine_active_segment(warehouse, stop_pairs)
         path: list[RouteCoordinate] = []
@@ -329,17 +350,14 @@ class PlanningService:
                 sequence=active_sequence,
             )
             if encoded_polyline and segment_path:
-                # Live routing call succeeded and returned road geometry.
                 path = segment_path
                 routing_status = "optimized"
                 provider = "Live routing + OpenStreetMap"
             elif segment_path:
-                # Live routing failed; using decoded path from stored route payload.
                 path = segment_path
                 routing_status = "optimized"
                 provider = "Stored route geometry + OpenStreetMap"
             else:
-                # No route geometry available at all — straight-line fallback.
                 path = self._build_fallback_path(active_origin, [active_stop])
                 routing_status = "fallback"
                 provider = "Fallback path + OpenStreetMap"
@@ -391,6 +409,10 @@ class PlanningService:
         if delivery_request.route_stops:
             return "already_grouped"
 
+        handling_type = self._derive_handling_type(delivery_request)
+        if handling_type == "pickup":
+            return "pickup_not_route_grouped"
+
         customer_details = delivery_request.customer_details
         if customer_details is None:
             return "missing_customer_enrichment"
@@ -417,6 +439,8 @@ class PlanningService:
         if delivery_request.request_snapshot is not None:
             raw_payload = delivery_request.request_snapshot.request_payload or {}
             order_type = raw_payload.get("order_type")
+            if order_type is None and isinstance(raw_payload.get("pickup"), bool):
+                order_type = "pickup" if raw_payload.get("pickup") else "delivery"
 
         if isinstance(order_type, str) and order_type.strip().lower() == "pickup":
             return "pickup"
@@ -424,9 +448,9 @@ class PlanningService:
         return "delivery"
 
     @staticmethod
-    def _route_group_name(group_key: str, scheduled_date) -> str:
+    def _route_group_name(group_key: str, scheduled_date, chunk_number: int) -> str:
         normalized_group_key = group_key.replace(" ", "_")
-        return f"route-group:{normalized_group_key}:{scheduled_date.strftime('%Y%m%dT%H%M%SZ')}"
+        return f"route-group:{normalized_group_key}:part{chunk_number}:{scheduled_date.strftime('%Y%m%dT%H%M%SZ')}"
 
     @staticmethod
     def _postal_prefix(postal_code: str | None) -> str | None:
@@ -465,10 +489,6 @@ class PlanningService:
         customer_details = stop.delivery_request.customer_details
         assert customer_details is not None
 
-        # Use the persisted planning/customer coordinates as the source of truth.
-        # Re-geocoding on every map read can resolve to a slightly different point
-        # than the coordinates already stored for the delivery, which makes markers
-        # appear inaccurate even when Leaflet is working correctly.
         latitude = float(customer_details.latitude) if customer_details.latitude is not None else None
         longitude = float(customer_details.longitude) if customer_details.longitude is not None else None
 
@@ -549,11 +569,6 @@ class PlanningService:
             if path:
                 return path, raw_polyline, result.total_distance_km, duration_min, duration_seconds
 
-        # Fallback: decode the path from the stored full-route payload.
-        # Do NOT forward the stored encoded_polyline string to the API response —
-        # it may have been written by an older broken decoder and would produce
-        # corrupt geometry when the client re-decodes it. Only the decoded
-        # coordinate list is safe to use here.
         _payload_polyline, payload_path, payload_distance_km, payload_duration_min, payload_duration_seconds = self._decode_route_payload_leg(group.route_payload, sequence)
         if payload_path:
             return payload_path, None, payload_distance_km, payload_duration_min, payload_duration_seconds
@@ -618,48 +633,49 @@ class PlanningService:
             return []
 
     @staticmethod
-    def _decode_route_payload(route_payload: dict | None) -> list[RouteCoordinate]:
-        if not isinstance(route_payload, dict):
-            return []
-
-        trip = route_payload.get("trip")
-        if not isinstance(trip, dict):
-            return []
-
-        legs = trip.get("legs")
-        if not isinstance(legs, list):
-            return []
-
-        decoded_points: list[RouteCoordinate] = []
-        for leg in legs:
-            if not isinstance(leg, dict):
-                continue
-            encoded_shape = leg.get("shape")
-            if not isinstance(encoded_shape, str) or not encoded_shape:
-                continue
-            leg_points = [
-                RouteCoordinate(latitude=lat, longitude=lon)
-                for lat, lon in decode_polyline(encoded_shape, precision=6)
-            ]
-            if not leg_points:
-                continue
-            if decoded_points and leg_points:
-                leg_points = leg_points[1:]
-            decoded_points.extend(leg_points)
-
-        return decoded_points
-
-    @staticmethod
     def _build_fallback_path(warehouse: RouteMapWaypoint, stops: list[RouteMapWaypoint]) -> list[RouteCoordinate]:
         coordinates = [
             RouteCoordinate(latitude=warehouse.latitude, longitude=warehouse.longitude),
-            *[
-                RouteCoordinate(latitude=stop.latitude, longitude=stop.longitude)
-                for stop in stops
-            ],
+            *[RouteCoordinate(latitude=stop.latitude, longitude=stop.longitude) for stop in stops],
         ]
         deduped: list[RouteCoordinate] = []
         for coordinate in coordinates:
             if not deduped or deduped[-1] != coordinate:
                 deduped.append(coordinate)
         return deduped
+
+    @staticmethod
+    def _chunk_candidates(candidates: list[BacklogPlanningCandidate], max_size: int) -> list[list[BacklogPlanningCandidate]]:
+        if max_size <= 0:
+            max_size = 50
+        return [candidates[index:index + max_size] for index in range(0, len(candidates), max_size)]
+
+    @staticmethod
+    def _next_business_day_start(reference: datetime) -> datetime:
+        tz = ZoneInfo(settings.planning_timezone)
+        local_reference = reference.astimezone(tz) if reference.tzinfo else reference.replace(tzinfo=UTC).astimezone(tz)
+        local_reference = local_reference.replace(
+            hour=settings.planning_workday_start_hour, minute=0, second=0, microsecond=0
+        )
+        while local_reference.weekday() >= 5:
+            local_reference += timedelta(days=1)
+            local_reference = local_reference.replace(hour=settings.planning_workday_start_hour, minute=0, second=0, microsecond=0)
+        return local_reference.astimezone(UTC)
+
+    def _scheduled_slot_for_route_index(self, reference: datetime, route_index: int) -> datetime:
+        daily_capacity = max(1, settings.planning_daily_route_capacity)
+        business_day_offset = route_index // daily_capacity
+        same_day_slot = route_index % daily_capacity
+
+        start = self._next_business_day_start(reference)
+        tz = ZoneInfo(settings.planning_timezone)
+        local_start = start.astimezone(tz)
+
+        while business_day_offset > 0:
+            local_start += timedelta(days=1)
+            local_start = local_start.replace(hour=settings.planning_workday_start_hour, minute=0, second=0, microsecond=0)
+            if local_start.weekday() < 5:
+                business_day_offset -= 1
+
+        local_start = local_start + timedelta(minutes=same_day_slot * 2)
+        return local_start.astimezone(UTC)

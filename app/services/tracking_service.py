@@ -14,9 +14,10 @@ from app.schemas.tracking import DeliveryStatusHistoryEntry, DeliveryStatusRespo
 
 _STATUS_ORDER = {
     "scheduled": 0,
-    "out_for_delivery": 1,
-    "delivered": 2,
-    "failed": 3,
+    "ready_for_pickup": 1,
+    "out_for_delivery": 2,
+    "delivered": 3,
+    "failed": 4,
 }
 
 
@@ -28,8 +29,6 @@ class TrackingService:
         self.repo = ExecutionRepository(self.db)
 
     def get_status(self, order_id: int) -> DeliveryStatusResponse | None:
-        """Return the persisted tracking view for an order, if one exists."""
-
         delivery_request = self.repo.get_tracking_context_by_order_id(order_id)
         if delivery_request is None or delivery_request.execution is None:
             return None
@@ -44,31 +43,23 @@ class TrackingService:
         route_stop = self._select_route_stop(delivery_request.route_stops)
         route_group = route_stop.route_group if route_stop is not None else None
         assignment = self._select_active_assignment(route_group.driver_assignments if route_group is not None else [])
-        
-        #Customer status mapping
+
         internal_status = normalize_delivery_execution_status(execution.current_status)
-        
-        status_map = {
-            "received": "order_placed",
+        external_status_map = {
             "scheduled": "scheduled",
+            "ready_for_pickup": "ready_for_pickup",
             "out_for_delivery": "out_for_delivery",
-            "completed": "delivered",
-            "picked_up": "available_for_pickup",
+            "delivered": "delivered",
+            "failed": "failed",
         }
-        
-        mapped_status = status_map.get(internal_status, "order_placed")
-
-
+        mapped_status = external_status_map.get(internal_status.value, "scheduled")
 
         return DeliveryStatusResponse(
             order_id=delivery_request.order_id,
             customer_id=delivery_request.customer_id,
             delivery_request_id=delivery_request.id,
             delivery_execution_id=execution.id,
-            
-            #delivery_status=normalize_delivery_execution_status(execution.current_status),
             delivery_status=mapped_status,
-            
             latest_status_at=self._ensure_utc(latest_history.changed_at) if latest_history is not None else None,
             latest_status_reason=latest_history.reason if latest_history is not None else None,
             route_group_id=route_stop.route_group_id if route_stop is not None else None,
@@ -110,7 +101,11 @@ class TrackingService:
     def _select_route_stop(route_stops) -> object | None:
         if not route_stops:
             return None
-        return sorted(route_stops, key=lambda stop: (stop.sequence, str(stop.id)))[0]
+        sorted_stops = sorted(route_stops, key=lambda stop: (stop.sequence, str(stop.id)))
+        for stop in sorted_stops:
+            if str(stop.stop_status).lower() != "completed":
+                return stop
+        return sorted_stops[-1]
 
     @staticmethod
     def _select_active_assignment(assignments) -> object | None:

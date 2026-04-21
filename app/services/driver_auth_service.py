@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import hashlib
+
 from sqlalchemy.orm import Session
+
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.repositories.driver_portal_repository import DriverPortalRepository
 from app.schemas.auth import DriverTokenSessionResponse
@@ -21,9 +25,19 @@ class DriverAuthService:
         payload = decode_driver_jwt(token)
         if payload.user_type != 'driver':
             raise DriverTokenError("Redirect token user_type must be 'driver'")
+
         account = self.repo.get_driver_account_by_email(payload.email)
         if account is None:
-            raise DriverAccountNotFoundError(f"No active driver account exists for {payload.email}. Seed or create the driver account first.")
+            driver_id = payload.subject_id or self._derive_driver_id(payload.email)
+            driver_name = (payload.name or payload.email.split('@')[0].replace('.', ' ').replace('_', ' ')).strip().title() or f"Driver {driver_id}"
+            account = self.repo.create_or_update_driver_account(
+                driver_id=driver_id,
+                email=payload.email,
+                driver_name=driver_name,
+                vehicle_type=settings.driver_auth_default_vehicle_type,
+                driver_status='available',
+            )
+
         active_group = self.repo.get_active_route_group_for_driver(account.driver_id)
         return DriverTokenSessionResponse(
             email=account.email,
@@ -40,3 +54,8 @@ class DriverAuthService:
 
     def close(self) -> None:
         self.db.close()
+
+    @staticmethod
+    def _derive_driver_id(email: str) -> int:
+        digest = hashlib.sha256(email.strip().lower().encode()).hexdigest()
+        return int(digest[:8], 16)

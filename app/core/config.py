@@ -3,35 +3,45 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "Farm2Fork Delivery Execution Service"
-    app_version: str = "0.1.0"
+    app_version: str = "0.2.0"
     database_url: str = "postgresql://postgres:password@db:5432/farm2fork"
     app_host: str = "0.0.0.0"
     app_port: int = 8000
-    customer_module_base_url: str = "http://customer-service:8000"
-    customer_module_customer_lookup_path: str = "/api/customers/{customer_id}"
+
+    customer_module_base_url: str = "http://159.203.16.186:3000"
+    customer_module_customer_lookup_path: str = "/customers/{customer_id}"
     customer_module_timeout_seconds: float = 5.0
+
     geocoding_base_url: str = "https://nominatim.openstreetmap.org"
     geocoding_lookup_path: str = "/search"
     geocoding_timeout_seconds: float = 10.0
-    geocoding_user_agent: str = "farm2fork-delivery-execution/0.1"
+    geocoding_user_agent: str = "farm2fork-delivery-execution/0.2"
     geocoding_default_country: str = "Canada"
+
     driver_service_base_url: str = "http://driver-service:8000"
     driver_service_drivers_path: str = "/api/drivers"
     driver_service_timeout_seconds: float = 5.0
-    driver_service_enable_dev_fallback: bool = True
+    driver_service_enable_dev_fallback: bool = False
+
     driver_auth_accept_unsigned_tokens: bool = True
+    driver_auth_default_vehicle_type: str = "Delivery Van"
+
     demo_data_auto_seed: bool = False
+
     customer_status_callback_enabled: bool = False
     customer_status_callback_base_url: str = ""
     customer_status_callback_path: str = "/api/orders/{order_id}/delivery-status"
     customer_status_callback_timeout_seconds: float = 5.0
+
     frontend_allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
     valhalla_base_url: str = "http://valhalla:8002"
     valhalla_timeout_seconds: float = 10.0
     valhalla_enable_routing: bool = False
     osrm_base_url: str = "https://router.project-osrm.org"
     osrm_timeout_seconds: float = 10.0
     osrm_enable_routing: bool = True
+
     warehouse_name: str = "Farm2Fork Warehouse"
     warehouse_street: str = "108 University Ave E"
     warehouse_city: str = "Waterloo"
@@ -41,11 +51,25 @@ class Settings(BaseSettings):
     warehouse_latitude: float = 43.4790290
     warehouse_longitude: float = -80.5179320
 
+    planning_timezone: str = "America/Toronto"
+    planning_workday_start_hour: int = 9
+    planning_workday_end_hour: int = 17
+    planning_driver_count: int = 100
+    planning_truck_count: int = 100
+    planning_max_orders_per_route: int = 50
+    planning_auto_assign_drivers: bool = False
+
+    intake_auto_sync_customer: bool = True
+    intake_auto_schedule: bool = True
+
     @property
     def frontend_allowed_origins_list(self) -> list[str]:
-        """Return normalized browser origins allowed to call the API directly."""
+        raw = [origin.strip() for origin in self.frontend_allowed_origins.split(",") if origin.strip()]
+        return raw or ["http://localhost:3000"]
 
-        return [origin.strip() for origin in self.frontend_allowed_origins.split(",") if origin.strip()]
+    @property
+    def allow_all_frontend_origins(self) -> bool:
+        return "*" in self.frontend_allowed_origins_list
 
     @property
     def warehouse_address(self) -> str:
@@ -57,6 +81,10 @@ class Settings(BaseSettings):
             self.warehouse_country,
         ]
         return ", ".join(part.strip() for part in parts if isinstance(part, str) and part.strip())
+
+    @property
+    def planning_daily_route_capacity(self) -> int:
+        return max(1, min(self.planning_driver_count, self.planning_truck_count))
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

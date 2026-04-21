@@ -27,3 +27,5 @@ class DriverJwtPayload(BaseModel):
     email: str
     user_type: str
     exp: int | None = None
+    subject_id: int | None = None
+    name: str | None = None
