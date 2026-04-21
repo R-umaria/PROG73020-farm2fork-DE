@@ -14,25 +14,25 @@ def decode_polyline(encoded: str, *, precision: int = 6) -> list[tuple[float, fl
     factor = 10 ** precision
 
     while index < len(encoded):
-        result = 1
+        result = 0
         shift = 0
         while True:
-            byte = ord(encoded[index]) - 63 - 1
+            byte = ord(encoded[index]) - 63
             index += 1
-            result += byte << shift
+            result |= (byte & 0x1F) << shift
             shift += 5
-            if byte < 0x1F:
+            if byte < 0x20:
                 break
         latitude += ~(result >> 1) if result & 1 else result >> 1
 
-        result = 1
+        result = 0
         shift = 0
         while True:
-            byte = ord(encoded[index]) - 63 - 1
+            byte = ord(encoded[index]) - 63
             index += 1
-            result += byte << shift
+            result |= (byte & 0x1F) << shift
             shift += 5
-            if byte < 0x1F:
+            if byte < 0x20:
                 break
         longitude += ~(result >> 1) if result & 1 else result >> 1
 

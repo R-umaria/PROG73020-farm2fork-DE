@@ -37,6 +37,7 @@ class RouteMapResponse(BaseModel):
     warehouse: RouteMapWaypoint
     stops: list[RouteMapWaypoint]
     path: list[RouteCoordinate]
+    encoded_polyline: str | None = None
     estimated_distance_km: float | None = None
     estimated_duration_min: int | None = None
     active_origin: RouteMapWaypoint | None = None

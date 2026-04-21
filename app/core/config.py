@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     valhalla_base_url: str = "http://valhalla:8002"
     valhalla_timeout_seconds: float = 10.0
     valhalla_enable_routing: bool = False
+    osrm_base_url: str = "https://router.project-osrm.org"
+    osrm_timeout_seconds: float = 10.0
+    osrm_enable_routing: bool = True
     warehouse_name: str = "Farm2Fork Warehouse"
     warehouse_street: str = "108 University Ave E"
     warehouse_city: str = "Waterloo"

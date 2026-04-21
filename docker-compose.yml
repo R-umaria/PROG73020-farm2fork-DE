@@ -29,6 +29,8 @@ services:
       DATABASE_URL: postgresql://postgres:password@db:5432/farm2fork
       VALHALLA_ENABLE_ROUTING: ${VALHALLA_ENABLE_ROUTING:-true}
       VALHALLA_BASE_URL: ${VALHALLA_BASE_URL:-http://host.docker.internal:8002}
+      OSRM_ENABLE_ROUTING: ${OSRM_ENABLE_ROUTING:-true}
+      OSRM_BASE_URL: ${OSRM_BASE_URL:-https://router.project-osrm.org}
       WAREHOUSE_NAME: ${WAREHOUSE_NAME:-Farm2Fork Warehouse}
       WAREHOUSE_STREET: ${WAREHOUSE_STREET:-108 University Ave E}
       WAREHOUSE_CITY: ${WAREHOUSE_CITY:-Waterloo}

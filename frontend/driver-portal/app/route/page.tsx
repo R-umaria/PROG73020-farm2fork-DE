@@ -120,7 +120,7 @@ export default function RouteOverviewPage() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">First ETA</p>
-                    <p className="font-semibold text-foreground">{formatShortTime(routeMap?.next_stop_eta ?? nextStop?.estimatedArrival)}</p>
+                    <p className="font-semibold text-foreground">{formatShortTime(routeMap?.next_stop_eta ?? null)}</p>
                   </div>
                 </div>
               </div>
@@ -133,7 +133,7 @@ export default function RouteOverviewPage() {
                   <div>
                     <p className="text-xs text-muted-foreground">Distance</p>
                     <p className="font-semibold text-foreground">
-                      {routeMap?.segment_distance_km != null ? `${routeMap.segment_distance_km.toFixed(1)} km` : routeMap?.estimated_distance_km != null ? `${routeMap.estimated_distance_km.toFixed(1)} km` : "Pending"}
+                      {routeMap?.segment_distance_km != null ? `${routeMap.segment_distance_km.toFixed(1)} km` : "Pending"}
                     </p>
                   </div>
                 </div>
@@ -147,7 +147,7 @@ export default function RouteOverviewPage() {
                   <div>
                     <p className="text-xs text-muted-foreground">Duration</p>
                     <p className="font-semibold text-foreground">
-                      {routeMap?.segment_duration_min != null ? `${routeMap.segment_duration_min} min` : routeMap?.estimated_duration_min != null ? `${routeMap.estimated_duration_min} min` : "Pending"}
+                      {routeMap?.segment_duration_min != null ? `${routeMap.segment_duration_min} min` : "Pending"}
                     </p>
                   </div>
                 </div>

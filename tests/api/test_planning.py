@@ -8,6 +8,7 @@ import pytest
 import app.models.db_models  # noqa: F401
 from app.api.routes import planning
 from app.core.database import Base, SessionLocal, engine
+from app.integrations.valhalla_client import RouteLeg, RouteResult
 from app.repositories.customer_repository import CustomerRepository
 from app.repositories.delivery_request_repository import DeliveryRequestRepository
 from app.repositories.planning_repository import PlanningRepository
@@ -526,3 +527,71 @@ def test_route_group_map_uses_warehouse_as_origin_before_first_completion():
     assert body["active_origin"]["route_stop_id"] is None
     assert body["active_stop"]["route_stop_id"] == str(stop.id)
     assert body["next_stop_eta"] is None or isinstance(body["next_stop_eta"], str)
+
+
+def test_route_group_map_returns_encoded_active_leg_polyline_and_segment_stats(monkeypatch):
+    db = SessionLocal()
+    try:
+        request_repo = DeliveryRequestRepository(db)
+        customer_repo = CustomerRepository(db)
+        planning_repo = PlanningRepository(db)
+
+        delivery = _seed_delivery_request(
+            order_id=4001,
+            customer_id=801,
+            customer_repo=customer_repo,
+            request_repo=request_repo,
+            city="Toronto",
+            province="ON",
+            postal_code="M5V 1A1",
+        )
+
+        route_group = planning_repo.create_route_group(
+            name="Encoded active leg",
+            scheduled_date=datetime(2026, 4, 9, 9, 0, tzinfo=timezone.utc),
+            status="in_progress",
+            zone_code="postal_prefix:M5V",
+            total_stops=1,
+        )
+        stop = planning_repo.add_route_stop(
+            route_group_id=route_group.id,
+            delivery_request_id=UUID(delivery["id"]),
+            sequence=1,
+            stop_status="planned",
+        )
+    finally:
+        db.close()
+
+    encoded_shape = "_izlhA~rlgdF_{geC~ywl@_kwzCn`{nI"
+    raw_payload = {
+        "trip": {
+            "summary": {"length": 3.4, "time": 612.0},
+            "legs": [
+                {"summary": {"length": 3.4, "time": 612.0}, "shape": encoded_shape}
+            ],
+        }
+    }
+
+    def fake_route(_locations):
+        return RouteResult(
+            total_distance_km=3.4,
+            total_duration_seconds=612.0,
+            legs=[RouteLeg(sequence=1, duration_seconds=612.0, distance_km=3.4, eta_offset_seconds=612.0)],
+            raw_payload=raw_payload,
+            encoded_polylines=[encoded_shape],
+        )
+
+    monkeypatch.setattr(planning.service.valhalla_client, "optimized_route", fake_route)
+
+    response = client.get(f"/api/planning/route-group/{route_group.id}/map")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["active_stop"]["route_stop_id"] == str(stop.id)
+    assert body["routing_status"] == "optimized"
+    assert body["encoded_polyline"] == encoded_shape
+    assert body["segment_distance_km"] == pytest.approx(3.4)
+    assert body["segment_duration_min"] == 10
+    assert len(body["path"]) >= 2
+    assert body["path"][0]["latitude"] == pytest.approx(38.5)
+    assert body["path"][0]["longitude"] == pytest.approx(-120.2)

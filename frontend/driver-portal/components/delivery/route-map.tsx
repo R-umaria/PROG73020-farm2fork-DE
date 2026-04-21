@@ -34,6 +34,46 @@ declare global {
 let leafletLoader: Promise<any> | null = null
 
 
+function decodePolyline(encoded: string, precision = 6): RouteMapCoordinate[] {
+  const coordinates: RouteMapCoordinate[] = []
+  let index = 0
+  let latitude = 0
+  let longitude = 0
+  const factor = 10 ** precision
+
+  while (index < encoded.length) {
+    let result = 0
+    let shift = 0
+    let byte = 0
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63
+      result |= (byte & 0x1f) << shift
+      shift += 5
+    } while (byte >= 0x20)
+
+    latitude += (result & 1) !== 0 ? ~(result >> 1) : result >> 1
+
+    result = 0
+    shift = 0
+    do {
+      byte = encoded.charCodeAt(index++) - 63
+      result |= (byte & 0x1f) << shift
+      shift += 5
+    } while (byte >= 0x20)
+
+    longitude += (result & 1) !== 0 ? ~(result >> 1) : result >> 1
+
+    coordinates.push({
+      latitude: latitude / factor,
+      longitude: longitude / factor,
+    })
+  }
+
+  return coordinates
+}
+
+
 function ensureLeafletLoaded(): Promise<any> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("Leaflet can only load in the browser."))
@@ -131,8 +171,10 @@ export function RouteMap({ routeData, className }: RouteMapProps) {
 
     const origin = hasUsableCoordinate(routeData.active_origin) ? routeData.active_origin : routeData.warehouse
     const stops = routeData.active_stop ? [routeData.active_stop] : routeData.stops
+    const polylinePath = routeData.encoded_polyline ? dedupePath(decodePolyline(routeData.encoded_polyline)) : []
     const backendPath = dedupePath(routeData.path)
-    const path = backendPath.length >= 2 ? backendPath : buildStraightFallbackPath(origin, stops)
+    const resolvedBackendPath = polylinePath.length >= 2 ? polylinePath : backendPath
+    const path = resolvedBackendPath.length >= 2 ? resolvedBackendPath : buildStraightFallbackPath(origin, stops)
     const pathLabel = routeData.routing_status === "optimized" ? "Active road route" : routeData.routing_status === "completed" ? "Route completed" : "Fallback route"
 
     setResolvedRouteData({
@@ -203,7 +245,11 @@ export function RouteMap({ routeData, className }: RouteMapProps) {
             warehouse: routeData.warehouse,
             origin: routeData.active_origin ?? routeData.warehouse,
             stops: routeData.active_stop ? [routeData.active_stop] : routeData.stops,
-            path: buildStraightFallbackPath(routeData.active_origin ?? routeData.warehouse, routeData.active_stop ? [routeData.active_stop] : routeData.stops),
+            path: (() => {
+              const polylinePath = routeData.encoded_polyline ? dedupePath(decodePolyline(routeData.encoded_polyline)) : []
+              const backendPath = dedupePath(routeData.path)
+              return polylinePath.length >= 2 ? polylinePath : backendPath.length >= 2 ? backendPath : buildStraightFallbackPath(routeData.active_origin ?? routeData.warehouse, routeData.active_stop ? [routeData.active_stop] : routeData.stops)
+            })(),
             pathLabel: routeData.routing_status === "optimized" ? "Active road route" : routeData.routing_status === "completed" ? "Route completed" : "Fallback route",
           }
         : null),
@@ -244,7 +290,7 @@ export function RouteMap({ routeData, className }: RouteMapProps) {
                 const originLatLng: [number, number] = [displayRoute.origin.latitude, displayRoute.origin.longitude]
         const stopLatLngs = displayRoute.stops.map((stop) => [stop.latitude, stop.longitude] as [number, number])
         const pathLatLngs = displayRoute.path.map((coordinate) => [coordinate.latitude, coordinate.longitude] as [number, number])
-        const allLatLngs = [originLatLng, ...stopLatLngs]
+        const allLatLngs = [...pathLatLngs, originLatLng, ...stopLatLngs]
 
         if (pathLatLngs.length >= 2) {
           L.polyline(pathLatLngs, {

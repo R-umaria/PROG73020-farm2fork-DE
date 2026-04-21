@@ -13,6 +13,7 @@ from app.core.database import SessionLocal
 from app.core.delivery_status import INITIAL_DELIVERY_EXECUTION_STATUS
 from app.integrations.errors import UpstreamBadResponseError, UpstreamNotFoundError, UpstreamTimeoutError
 from app.integrations.geocoding_client import GeocodingClient
+from app.integrations.osrm_client import OsrmClient
 from app.integrations.valhalla_client import ValhallaClient
 from app.repositories.customer_repository import CustomerRepository
 from app.repositories.execution_repository import ExecutionRepository
@@ -43,6 +44,7 @@ class PlanningService:
         driver_assignment_policy: DriverAssignmentPolicy | None = None,
         geocoding_client: GeocodingClient | None = None,
         valhalla_client: ValhallaClient | None = None,
+        osrm_client: OsrmClient | None = None,
     ):
         self.db: Session = db or SessionLocal()
         self.repo = PlanningRepository(self.db)
@@ -51,6 +53,7 @@ class PlanningService:
         self.driver_assignment_policy = driver_assignment_policy or DriverAssignmentPolicy()
         self.geocoding_client = geocoding_client or GeocodingClient()
         self.valhalla_client = valhalla_client or ValhallaClient()
+        self.osrm_client = osrm_client or OsrmClient()
 
     def geocode_pending_requests(self) -> PlanningResponse:
         pending = self.customer_repo.list_pending_geocodes()
@@ -249,9 +252,6 @@ class PlanningService:
         )
 
     def optimize_route_group(self, route_group_id: UUID) -> bool:
-        if not settings.valhalla_enable_routing:
-            return False
-
         group = self.repo.get_route_group_by_id(route_group_id)
         if group is None:
             return False
@@ -266,15 +266,14 @@ class PlanningService:
             for stop in valid_stops
         ]
 
-        try:
-            result = self.valhalla_client.optimized_route(locations)
-        except Exception:
+        result = self._route_locations(locations)
+        if result is None:
             return False
 
         self.repo.update_route_group_routing(
             route_group_id=route_group_id,
             estimated_distance_km=result.total_distance_km,
-            estimated_duration_min=int(result.total_duration_seconds // 60),
+            estimated_duration_min=max(1, int(round(result.total_duration_seconds / 60))) if result.total_duration_seconds > 0 else 0,
             route_payload=result.raw_payload,
         )
 
@@ -314,29 +313,40 @@ class PlanningService:
 
         active_origin, active_stop, active_sequence = self._determine_active_segment(warehouse, stop_pairs)
         path: list[RouteCoordinate] = []
+        encoded_polyline: str | None = None
         routing_status = "completed" if active_stop is None else "fallback"
         provider = "No active route"
         segment_distance_km: float | None = None
         segment_duration_min: int | None = None
+        segment_duration_seconds: float | None = None
         next_stop_eta: str | None = None
 
         if active_origin is not None and active_stop is not None and active_sequence is not None:
-            segment_path, segment_distance_km, segment_duration_min = self._resolve_active_segment_route(
+            segment_path, encoded_polyline, segment_distance_km, segment_duration_min, segment_duration_seconds = self._resolve_active_segment_route(
                 group=group,
                 origin=active_origin,
                 destination=active_stop,
                 sequence=active_sequence,
             )
-            if segment_path:
+            if encoded_polyline and segment_path:
+                # Live routing call succeeded and returned road geometry.
                 path = segment_path
                 routing_status = "optimized"
-                provider = "Valhalla + OpenStreetMap"
+                provider = "Live routing + OpenStreetMap"
+            elif segment_path:
+                # Live routing failed; using decoded path from stored route payload.
+                path = segment_path
+                routing_status = "optimized"
+                provider = "Stored route geometry + OpenStreetMap"
             else:
+                # No route geometry available at all — straight-line fallback.
                 path = self._build_fallback_path(active_origin, [active_stop])
                 routing_status = "fallback"
                 provider = "Fallback path + OpenStreetMap"
 
-            if segment_duration_min is not None:
+            if segment_duration_seconds is not None:
+                next_stop_eta = (datetime.now(timezone.utc) + timedelta(seconds=segment_duration_seconds)).isoformat()
+            elif segment_duration_min is not None:
                 next_stop_eta = (datetime.now(timezone.utc) + timedelta(minutes=segment_duration_min)).isoformat()
 
         return RouteMapResponse(
@@ -348,6 +358,7 @@ class PlanningService:
             warehouse=warehouse,
             stops=[active_stop] if active_stop is not None else [],
             path=path,
+            encoded_polyline=encoded_polyline,
             estimated_distance_km=float(group.estimated_distance_km) if group.estimated_distance_km is not None else None,
             estimated_duration_min=group.estimated_duration_min,
             active_origin=active_origin,
@@ -525,51 +536,86 @@ class PlanningService:
         origin: RouteMapWaypoint,
         destination: RouteMapWaypoint,
         sequence: int,
-    ) -> tuple[list[RouteCoordinate], float | None, int | None]:
-        payload_path, payload_distance_km, payload_duration_min = self._decode_route_payload_leg(group.route_payload, sequence)
+    ) -> tuple[list[RouteCoordinate], str | None, float | None, int | None, float | None]:
+        result = self._route_locations([
+            (origin.latitude, origin.longitude),
+            (destination.latitude, destination.longitude),
+        ])
+        if result is not None:
+            raw_polyline = (result.encoded_polylines or [None])[0] or None
+            path = self._decode_polyline_coordinates(raw_polyline)
+            duration_seconds = result.total_duration_seconds
+            duration_min = max(1, int(round(duration_seconds / 60))) if duration_seconds > 0 else 0
+            if path:
+                return path, raw_polyline, result.total_distance_km, duration_min, duration_seconds
+
+        # Fallback: decode the path from the stored full-route payload.
+        # Do NOT forward the stored encoded_polyline string to the API response —
+        # it may have been written by an older broken decoder and would produce
+        # corrupt geometry when the client re-decodes it. Only the decoded
+        # coordinate list is safe to use here.
+        _payload_polyline, payload_path, payload_distance_km, payload_duration_min, payload_duration_seconds = self._decode_route_payload_leg(group.route_payload, sequence)
         if payload_path:
-            return payload_path, payload_distance_km, payload_duration_min
+            return payload_path, None, payload_distance_km, payload_duration_min, payload_duration_seconds
 
-        try:
-            result = self.valhalla_client.optimized_route([
-                (origin.latitude, origin.longitude),
-                (destination.latitude, destination.longitude),
-            ])
-        except Exception:
-            return [], None, None
+        return [], None, None, None, None
 
-        path = self._decode_route_payload(result.raw_payload)
-        return path, result.total_distance_km, int(result.total_duration_seconds // 60)
-
-    @staticmethod
-    def _decode_route_payload_leg(route_payload: dict | None, sequence: int) -> tuple[list[RouteCoordinate], float | None, int | None]:
+    @classmethod
+    def _decode_route_payload_leg(cls, route_payload: dict | None, sequence: int) -> tuple[str | None, list[RouteCoordinate], float | None, int | None, float | None]:
         if not isinstance(route_payload, dict) or sequence < 1:
-            return [], None, None
+            return None, [], None, None, None
 
         trip = route_payload.get("trip")
         if not isinstance(trip, dict):
-            return [], None, None
+            return None, [], None, None, None
 
         legs = trip.get("legs")
         if not isinstance(legs, list) or sequence > len(legs):
-            return [], None, None
+            return None, [], None, None, None
 
         leg = legs[sequence - 1]
         if not isinstance(leg, dict):
-            return [], None, None
+            return None, [], None, None, None
 
         encoded_shape = leg.get("shape")
-        if not isinstance(encoded_shape, str) or not encoded_shape:
-            return [], None, None
-
-        points = [
-            RouteCoordinate(latitude=lat, longitude=lon)
-            for lat, lon in decode_polyline(encoded_shape, precision=6)
-        ]
+        encoded_polyline = encoded_shape if isinstance(encoded_shape, str) and encoded_shape else None
+        points = cls._decode_polyline_coordinates(encoded_polyline)
         summary = leg.get("summary") if isinstance(leg.get("summary"), dict) else {}
         distance_km = float(summary["length"]) if "length" in summary else None
-        duration_min = int(float(summary["time"]) // 60) if "time" in summary else None
-        return points, distance_km, duration_min
+        duration_seconds = float(summary["time"]) if "time" in summary else None
+        duration_min = max(1, int(round(duration_seconds / 60))) if duration_seconds is not None and duration_seconds > 0 else (0 if duration_seconds == 0 else None)
+        return encoded_polyline, points, distance_km, duration_min, duration_seconds
+
+    def _route_locations(self, locations: list[tuple[float, float]]):
+        if len(locations) < 2:
+            return None
+
+        if settings.valhalla_enable_routing:
+            try:
+                return self.valhalla_client.optimized_route(locations)
+            except Exception:
+                pass
+
+        if settings.osrm_enable_routing:
+            try:
+                return self.osrm_client.route(locations)
+            except Exception:
+                pass
+
+        return None
+
+    @staticmethod
+    def _decode_polyline_coordinates(encoded_polyline: str | None) -> list[RouteCoordinate]:
+        if not encoded_polyline:
+            return []
+
+        try:
+            return [
+                RouteCoordinate(latitude=lat, longitude=lon)
+                for lat, lon in decode_polyline(encoded_polyline, precision=6)
+            ]
+        except Exception:
+            return []
 
     @staticmethod
     def _decode_route_payload(route_payload: dict | None) -> list[RouteCoordinate]:

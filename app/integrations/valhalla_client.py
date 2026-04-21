@@ -27,6 +27,7 @@ class RouteResult:
     total_duration_seconds: float
     legs: list[RouteLeg]
     raw_payload: dict | None = None
+    encoded_polylines: list[str] | None = None
 
 
 class ValhallaClient:
@@ -53,6 +54,7 @@ class ValhallaClient:
             ],
             "costing": "auto",
             "directions_options": {"units": "kilometers"},
+            "shape_format": "polyline6",
         }
 
         response = self._post(f"{self.base_url}/route", body)
@@ -83,10 +85,13 @@ class ValhallaClient:
         total_duration_seconds = float(summary["time"])
 
         legs: list[RouteLeg] = []
+        encoded_polylines: list[str] = []
         cumulative_seconds = 0.0
         for i, leg in enumerate(raw_legs):
             leg_duration = float(leg["summary"]["time"])
             leg_distance = float(leg["summary"]["length"])
+            encoded_shape = leg.get("shape")
+            encoded_polylines.append(encoded_shape if isinstance(encoded_shape, str) else "")
             legs.append(RouteLeg(
                 sequence=i + 1,  # when called with warehouse first, leg 1 arrives at stop 1
                 duration_seconds=leg_duration,
@@ -99,7 +104,8 @@ class ValhallaClient:
             total_distance_km=total_distance_km,
             total_duration_seconds=total_duration_seconds,
             legs=legs,
-            raw_payload=payload
+            raw_payload=payload,
+            encoded_polylines=encoded_polylines,
         )
 
     def _post(self, url: str, body: dict) -> httpx.Response:
