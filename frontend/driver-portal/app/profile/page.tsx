@@ -16,7 +16,7 @@ const menuItems = [
 ]
 
 export default function ProfilePage() {
-  const { session, isReady, signOut } = useDriverSession({ required: true })
+  const { session, isReady, signOut } = useDriverSession({ required: true, requireShift: true })
 
   if (!isReady || !session) {
     return null
@@ -62,7 +62,7 @@ export default function ProfilePage() {
           Sign Out
         </Button>
 
-        <p className="text-center text-xs text-muted-foreground pt-2">Signed in at {new Date(session.signedInAt).toLocaleString()}</p>
+        <div className="rounded-xl border border-border p-3 text-left"><p className="text-xs text-muted-foreground">Active shift</p><p className="mt-1 font-medium text-foreground">{session.selectedShiftName ?? "No shift selected"}</p><p className="mt-1 text-xs text-muted-foreground">{session.selectedZoneCode ? `Region ${session.selectedZoneCode}` : "Shift selection controls dashboard scope"}</p></div><p className="text-center text-xs text-muted-foreground pt-2">Signed in at {new Date(session.signedInAt).toLocaleString()}</p>
       </main>
     </AppShell>
   )

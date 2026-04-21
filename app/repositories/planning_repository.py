@@ -117,8 +117,8 @@ class PlanningRepository:
             .all()
         )
 
-    def list_driver_route_stops(self, driver_id: int) -> list[RouteStop]:
-        return (
+    def list_driver_route_stops(self, driver_id: int, route_group_id: UUID | None = None) -> list[RouteStop]:
+        query = (
             self.db.query(RouteStop)
             .join(RouteGroup, RouteGroup.id == RouteStop.route_group_id)
             .join(DriverAssignment, DriverAssignment.route_group_id == RouteGroup.id)
@@ -129,9 +129,10 @@ class PlanningRepository:
             .filter(DriverAssignment.driver_id == driver_id)
             .filter(DriverAssignment.assignment_status.in_(["assigned", "accepted"]))
             .filter(RouteGroup.status.in_(["draft", "scheduled", "in_progress"]))
-            .order_by(RouteGroup.scheduled_date.asc(), RouteStop.sequence.asc(), RouteStop.id.asc())
-            .all()
         )
+        if route_group_id is not None:
+            query = query.filter(RouteGroup.id == route_group_id)
+        return query.order_by(RouteGroup.scheduled_date.asc(), RouteStop.sequence.asc(), RouteStop.id.asc()).all()
 
     def update_route_stop_status(self, *, route_stop_id: UUID, stop_status: str) -> RouteStop | None:
         stop = (

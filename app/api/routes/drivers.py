@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
+from app.core.database import get_db
 from app.integrations.errors import (
     UpstreamBadResponseError,
     UpstreamNotFoundError,
@@ -9,7 +11,6 @@ from app.schemas.driver import DriverSummaryResponse
 from app.services.driver_service import DriverService
 
 router = APIRouter()
-service = DriverService()
 
 
 @router.get(
@@ -23,7 +24,8 @@ service = DriverService()
     summary="List available driver roster data (v1)",
     response_description="Driver roster projected from the Driver Service dependency using the explicit v1 driver contract.",
 )
-def list_drivers():
+def list_drivers(db: Session = Depends(get_db)):
+    service = DriverService(db)
     try:
         return service.list_drivers()
     except UpstreamNotFoundError as exc:
@@ -32,3 +34,5 @@ def list_drivers():
         raise HTTPException(status_code=504, detail=str(exc)) from exc
     except UpstreamBadResponseError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    finally:
+        service.close()

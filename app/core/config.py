@@ -18,19 +18,28 @@ class Settings(BaseSettings):
     driver_service_base_url: str = "http://driver-service:8000"
     driver_service_drivers_path: str = "/api/drivers"
     driver_service_timeout_seconds: float = 5.0
-    driver_service_enable_dev_fallback: bool = False
+    driver_service_enable_dev_fallback: bool = True
+    driver_auth_accept_unsigned_tokens: bool = True
+    demo_data_auto_seed: bool = False
+    customer_status_callback_enabled: bool = False
+    customer_status_callback_base_url: str = ""
+    customer_status_callback_path: str = "/api/orders/{order_id}/delivery-status"
+    customer_status_callback_timeout_seconds: float = 5.0
     frontend_allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     valhalla_base_url: str = "http://valhalla:8002"
     valhalla_timeout_seconds: float = 10.0
     valhalla_enable_routing: bool = False
+    osrm_base_url: str = "https://router.project-osrm.org"
+    osrm_timeout_seconds: float = 10.0
+    osrm_enable_routing: bool = True
     warehouse_name: str = "Farm2Fork Warehouse"
-    warehouse_street: str = "100 Queen St W"
-    warehouse_city: str = "Toronto"
+    warehouse_street: str = "108 University Ave E"
+    warehouse_city: str = "Waterloo"
     warehouse_province: str = "ON"
-    warehouse_postal_code: str = "M5H 2N2"
+    warehouse_postal_code: str = "N2J 2W2"
     warehouse_country: str = "Canada"
-    warehouse_latitude: float = 43.6534817
-    warehouse_longitude: float = -79.3839347
+    warehouse_latitude: float = 43.4790290
+    warehouse_longitude: float = -80.5179320
 
     @property
     def frontend_allowed_origins_list(self) -> list[str]:

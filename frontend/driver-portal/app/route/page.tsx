@@ -18,7 +18,7 @@ import { formatRouteLabel, formatShortTime, formatTimeWindow } from "@/lib/porta
 
 export default function RouteOverviewPage() {
   const router = useRouter()
-  const { session, isReady } = useDriverSession({ required: true })
+  const { session, isReady } = useDriverSession({ required: true, requireShift: true })
   const driver = session
     ? {
         driver_id: session.driverId,
@@ -27,13 +27,13 @@ export default function RouteOverviewPage() {
         driver_status: session.driverStatus,
       }
     : null
-  const { data, isLoading, error, refresh } = useDriverPortalData(driver)
+  const { data, isLoading, error, refresh } = useDriverPortalData(driver, session?.selectedShiftId)
   const [routeMap, setRouteMap] = useState<RouteMapData | null>(null)
   const [routeMapError, setRouteMapError] = useState<string | null>(null)
   const [isRouteMapLoading, setIsRouteMapLoading] = useState(false)
 
   useEffect(() => {
-    const routeGroupId = data?.stops[0]?.routeGroupId
+    const routeGroupId = data?.stops.find((stop) => stop.stopStatus !== "completed")?.routeGroupId ?? data?.stops[0]?.routeGroupId
     if (!routeGroupId) {
       setRouteMap(null)
       setRouteMapError(null)
@@ -66,18 +66,18 @@ export default function RouteOverviewPage() {
     return () => {
       isCancelled = true
     }
-  }, [data?.stops[0]?.routeGroupId])
+  }, [data])
 
   if (!isReady || !session) {
     return null
   }
 
-  const firstStop = data?.stops[0] ?? null
+  const nextStop = data?.stops.find((stop) => stop.stopStatus !== "completed") ?? data?.stops[0] ?? null
   const lastStop = data?.stops.length ? data.stops[data.stops.length - 1] : null
 
   return (
     <AppShell>
-      <PageHeader title="Route Overview" subtitle={formatRouteLabel(firstStop?.routeGroupId)} backHref="/dashboard" />
+      <PageHeader title="Route Overview" subtitle={session.selectedShiftName ?? formatRouteLabel(nextStop?.routeGroupId)} backHref="/dashboard" />
 
       <main className="px-4 py-6 max-w-4xl mx-auto space-y-6">
         {isLoading ? (
@@ -108,7 +108,7 @@ export default function RouteOverviewPage() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Route ID</p>
-                    <p className="font-semibold text-foreground">{formatRouteLabel(firstStop?.routeGroupId)}</p>
+                    <p className="font-semibold text-foreground">{formatRouteLabel(nextStop?.routeGroupId)}</p>
                   </div>
                 </div>
               </div>
@@ -120,7 +120,7 @@ export default function RouteOverviewPage() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">First ETA</p>
-                    <p className="font-semibold text-foreground">{formatShortTime(firstStop?.estimatedArrival)}</p>
+                    <p className="font-semibold text-foreground">{formatShortTime(routeMap?.next_stop_eta ?? null)}</p>
                   </div>
                 </div>
               </div>
@@ -133,7 +133,7 @@ export default function RouteOverviewPage() {
                   <div>
                     <p className="text-xs text-muted-foreground">Distance</p>
                     <p className="font-semibold text-foreground">
-                      {routeMap?.estimated_distance_km != null ? `${routeMap.estimated_distance_km.toFixed(1)} km` : "Pending"}
+                      {routeMap?.segment_distance_km != null ? `${routeMap.segment_distance_km.toFixed(1)} km` : "Pending"}
                     </p>
                   </div>
                 </div>
@@ -147,7 +147,7 @@ export default function RouteOverviewPage() {
                   <div>
                     <p className="text-xs text-muted-foreground">Duration</p>
                     <p className="font-semibold text-foreground">
-                      {routeMap?.estimated_duration_min != null ? `${routeMap.estimated_duration_min} min` : "Pending"}
+                      {routeMap?.segment_duration_min != null ? `${routeMap.segment_duration_min} min` : "Pending"}
                     </p>
                   </div>
                 </div>
@@ -194,7 +194,7 @@ export default function RouteOverviewPage() {
             <section>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-foreground">Planned Stops</h2>
-                <Button onClick={() => router.push(`/deliveries/${firstStop?.routeStopId}`)} className="bg-[var(--evergreen)] hover:bg-[var(--evergreen)]/90 text-white">
+                <Button onClick={() => router.push(`/deliveries/${nextStop?.routeStopId}`)} className="bg-[var(--evergreen)] hover:bg-[var(--evergreen)]/90 text-white">
                   Open Next Stop
                   <ChevronRight className="w-4 h-4 ml-2" />
                 </Button>
@@ -219,8 +219,10 @@ export default function RouteOverviewPage() {
             <div className="flex items-center justify-center text-xs text-muted-foreground gap-2 text-center">
               <Navigation className="w-4 h-4" />
               {routeMap?.routing_status === "optimized"
-                ? "The map is rendering the stored Valhalla route geometry for this planned route group."
-                : "The map is rendering the warehouse and stop coordinates; live device location is not required for planned route display."}
+                ? "The map is rendering only the active driving leg to the next stop using backend route geometry."
+                : routeMap?.routing_status === "completed"
+                  ? "All planned stops for this route group are completed."
+                  : "The map is rendering the active leg with a straight fallback because turn-by-turn geometry is unavailable."}
             </div>
           </>
         )}
