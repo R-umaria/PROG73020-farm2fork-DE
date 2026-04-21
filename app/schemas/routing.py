@@ -39,3 +39,8 @@ class RouteMapResponse(BaseModel):
     path: list[RouteCoordinate]
     estimated_distance_km: float | None = None
     estimated_duration_min: int | None = None
+    active_origin: RouteMapWaypoint | None = None
+    active_stop: RouteMapWaypoint | None = None
+    segment_distance_km: float | None = None
+    segment_duration_min: int | None = None
+    next_stop_eta: str | None = None

@@ -370,3 +370,159 @@ def test_get_route_group_map_returns_warehouse_and_stop_coordinates():
     assert body["stops"][0]["sequence"] == 1
     assert body["stops"][1]["sequence"] == 2
     assert len(body["path"]) >= 3
+
+
+def test_route_map_preserves_persisted_customer_coordinates_instead_of_regeocoding():
+    db = SessionLocal()
+    try:
+        request_repo = DeliveryRequestRepository(db)
+        customer_repo = CustomerRepository(db)
+        planning_repo = PlanningRepository(db)
+
+        delivery = _seed_delivery_request(
+            order_id=2101,
+            customer_id=701,
+            customer_repo=customer_repo,
+            request_repo=request_repo,
+            city="Kitchener",
+            province="ON",
+            postal_code="N2H 3W5",
+        )
+
+        route_group = planning_repo.create_route_group(
+            name="Coordinate Integrity Route",
+            scheduled_date=datetime(2026, 4, 9, 9, 0, tzinfo=timezone.utc),
+            status="scheduled",
+            zone_code="postal_prefix:N2H",
+            total_stops=1,
+        )
+        planning_repo.add_route_stop(
+            route_group_id=route_group.id,
+            delivery_request_id=UUID(delivery["id"]),
+            sequence=1,
+            stop_status="planned",
+        )
+    finally:
+        db.close()
+
+    original = PlanningService._build_route_waypoint
+
+    class FailingIfCalledGeocoder:
+        def geocode_address(self, **kwargs):
+            raise AssertionError("Map generation should not re-geocode persisted customer coordinates")
+
+    def patched(stop, geocoding_client=None):
+        return original(stop, geocoding_client=FailingIfCalledGeocoder())
+
+    monkeypatch_target = "app.services.planning_service.PlanningService._build_route_waypoint"
+
+    from unittest.mock import patch
+
+    with patch(monkeypatch_target, side_effect=patched):
+        response = client.get(f"/api/planning/route-group/{route_group.id}/map")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["stops"]) == 1
+    assert body["stops"][0]["latitude"] == pytest.approx(43.6532)
+    assert body["stops"][0]["longitude"] == pytest.approx(-79.3832)
+
+def test_route_group_map_returns_only_active_next_segment_after_completed_stop():
+    db = SessionLocal()
+    try:
+        request_repo = DeliveryRequestRepository(db)
+        customer_repo = CustomerRepository(db)
+        planning_repo = PlanningRepository(db)
+
+        first_delivery = _seed_delivery_request(
+            order_id=2001,
+            customer_id=601,
+            customer_repo=customer_repo,
+            request_repo=request_repo,
+            city="Toronto",
+            province="ON",
+            postal_code="M5V 1A1",
+        )
+        second_delivery = _seed_delivery_request(
+            order_id=2002,
+            customer_id=602,
+            customer_repo=customer_repo,
+            request_repo=request_repo,
+            city="Toronto",
+            province="ON",
+            postal_code="M5V 2B2",
+        )
+
+        route_group = planning_repo.create_route_group(
+            name="Active route",
+            scheduled_date=datetime(2026, 4, 9, 9, 0, tzinfo=timezone.utc),
+            status="in_progress",
+            zone_code="postal_prefix:M5V",
+            total_stops=2,
+        )
+        first_stop = planning_repo.add_route_stop(
+            route_group_id=route_group.id,
+            delivery_request_id=UUID(first_delivery["id"]),
+            sequence=1,
+            stop_status="completed",
+        )
+        second_stop = planning_repo.add_route_stop(
+            route_group_id=route_group.id,
+            delivery_request_id=UUID(second_delivery["id"]),
+            sequence=2,
+            stop_status="planned",
+        )
+    finally:
+        db.close()
+
+    response = client.get(f"/api/planning/route-group/{route_group.id}/map")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["active_origin"]["route_stop_id"] == str(first_stop.id)
+    assert body["active_stop"]["route_stop_id"] == str(second_stop.id)
+    assert len(body["stops"]) == 1
+    assert body["stops"][0]["route_stop_id"] == str(second_stop.id)
+    assert len(body["path"]) >= 2
+
+
+def test_route_group_map_uses_warehouse_as_origin_before_first_completion():
+    db = SessionLocal()
+    try:
+        request_repo = DeliveryRequestRepository(db)
+        customer_repo = CustomerRepository(db)
+        planning_repo = PlanningRepository(db)
+
+        delivery = _seed_delivery_request(
+            order_id=3001,
+            customer_id=701,
+            customer_repo=customer_repo,
+            request_repo=request_repo,
+            city="Toronto",
+            province="ON",
+            postal_code="M5V 1A1",
+        )
+
+        route_group = planning_repo.create_route_group(
+            name="First leg route",
+            scheduled_date=datetime(2026, 4, 9, 9, 0, tzinfo=timezone.utc),
+            status="scheduled",
+            zone_code="postal_prefix:M5V",
+            total_stops=1,
+        )
+        stop = planning_repo.add_route_stop(
+            route_group_id=route_group.id,
+            delivery_request_id=UUID(delivery["id"]),
+            sequence=1,
+            stop_status="planned",
+        )
+    finally:
+        db.close()
+
+    response = client.get(f"/api/planning/route-group/{route_group.id}/map")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["active_origin"]["route_stop_id"] is None
+    assert body["active_stop"]["route_stop_id"] == str(stop.id)
+    assert body["next_stop_eta"] is None or isinstance(body["next_stop_eta"], str)

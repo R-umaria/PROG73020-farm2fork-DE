@@ -44,9 +44,9 @@ class DemoSeedService:
                 'distance': 18.6,
                 'duration_min': 56,
                 'customers': [
-                    ('Alex Morgan', '519-555-0101', '200 University Ave W', 'Waterloo', 'ON', 'N2L 3G1', (43.4722854, -80.5448576)),
-                    ('Taylor Brooks', '519-555-0102', '151 King St N', 'Waterloo', 'ON', 'N2J 2Y5', (43.46705, -80.52236)),
-                    ('Casey Nguyen', '519-555-0103', '65 William St E', 'Waterloo', 'ON', 'N2J 1K8', (43.46518, -80.51762)),
+                    ('Alex Morgan', '519-555-0101', '239 Albert St', 'Waterloo', 'ON', 'N2L 0K5', (43.4745451,-80.5327214)),
+                    ('Taylor Brooks', '519-555-0102', '475 King St N', 'Waterloo', 'ON', 'N2J 2Z5', (43.4903572,-80.5302278)),
+                    ('Casey Nguyen', '519-555-0103', '300 Regina St N', 'Waterloo', 'ON', 'N2J 3B8', (43.4786792,-80.5234129)),
                 ],
             },
             {

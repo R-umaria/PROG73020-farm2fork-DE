@@ -13,6 +13,7 @@ interface RouteMapProps {
 
 interface ResolvedRouteMapState {
   warehouse: RouteMapWaypoint
+  origin: RouteMapWaypoint
   stops: RouteMapWaypoint[]
   path: RouteMapCoordinate[]
   pathLabel: string
@@ -32,8 +33,6 @@ declare global {
 
 let leafletLoader: Promise<any> | null = null
 
-const NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
-const OSRM_ROUTE_URL = "https://router.project-osrm.org/route/v1/driving"
 
 function ensureLeafletLoaded(): Promise<any> {
   if (typeof window === "undefined") {
@@ -107,90 +106,8 @@ function buildStraightFallbackPath(warehouse: RouteMapWaypoint, stops: RouteMapW
   ])
 }
 
-async function geocodeAddress(address: string): Promise<RouteMapCoordinate | null> {
-  const response = await fetch(
-    `${NOMINATIM_SEARCH_URL}?format=jsonv2&limit=1&countrycodes=ca&q=${encodeURIComponent(address)}`,
-    {
-      headers: {
-        Accept: "application/json",
-      },
-      cache: "force-cache",
-    },
-  )
-
-  if (!response.ok) {
-    return null
-  }
-
-  const payload = (await response.json()) as Array<{ lat?: string; lon?: string }>
-  const first = payload[0]
-  if (!first?.lat || !first?.lon) {
-    return null
-  }
-
-  const latitude = Number(first.lat)
-  const longitude = Number(first.lon)
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    return null
-  }
-
-  return { latitude, longitude }
-}
-
-function hasUsableCoordinate(waypoint: RouteMapWaypoint): boolean {
-  return Number.isFinite(waypoint.latitude) && Number.isFinite(waypoint.longitude) && !(waypoint.latitude === 0 && waypoint.longitude === 0)
-}
-
-async function refineWaypointByAddress(waypoint: RouteMapWaypoint): Promise<RouteMapWaypoint> {
-  if (hasUsableCoordinate(waypoint) || !waypoint.address) {
-    return waypoint
-  }
-
-  try {
-    const preciseCoordinate = await geocodeAddress(waypoint.address)
-    if (!preciseCoordinate) {
-      return waypoint
-    }
-    return {
-      ...waypoint,
-      latitude: preciseCoordinate.latitude,
-      longitude: preciseCoordinate.longitude,
-    }
-  } catch {
-    return waypoint
-  }
-}
-
-async function buildRoadPath(waypoints: RouteMapWaypoint[]): Promise<RouteMapCoordinate[]> {
-  if (waypoints.length < 2) {
-    return []
-  }
-
-  const coordinates = waypoints.map((waypoint) => `${waypoint.longitude},${waypoint.latitude}`).join(";")
-  const response = await fetch(
-    `${OSRM_ROUTE_URL}/${coordinates}?overview=full&geometries=geojson&steps=false`,
-    { cache: "no-store" },
-  )
-
-  if (!response.ok) {
-    return []
-  }
-
-  const payload = (await response.json()) as {
-    code?: string
-    routes?: Array<{ geometry?: { coordinates?: Array<[number, number]> } }>
-  }
-
-  if (payload.code !== "Ok") {
-    return []
-  }
-
-  const coordinatesPath = payload.routes?.[0]?.geometry?.coordinates ?? []
-  return dedupePath(
-    coordinatesPath
-      .map(([longitude, latitude]) => ({ latitude, longitude }))
-      .filter((coordinate) => Number.isFinite(coordinate.latitude) && Number.isFinite(coordinate.longitude)),
-  )
+function hasUsableCoordinate(waypoint: RouteMapWaypoint | null | undefined): waypoint is RouteMapWaypoint {
+  return !!waypoint && Number.isFinite(waypoint.latitude) && Number.isFinite(waypoint.longitude) && !(waypoint.latitude === 0 && waypoint.longitude === 0)
 }
 
 export function RouteMap({ routeData, className }: RouteMapProps) {
@@ -212,47 +129,19 @@ export function RouteMap({ routeData, className }: RouteMapProps) {
       return
     }
 
-    let isCancelled = false
+    const origin = hasUsableCoordinate(routeData.active_origin) ? routeData.active_origin : routeData.warehouse
+    const stops = routeData.active_stop ? [routeData.active_stop] : routeData.stops
+    const backendPath = dedupePath(routeData.path)
+    const path = backendPath.length >= 2 ? backendPath : buildStraightFallbackPath(origin, stops)
+    const pathLabel = routeData.routing_status === "optimized" ? "Active road route" : routeData.routing_status === "completed" ? "Route completed" : "Fallback route"
 
-    void (async () => {
-      // Preserve backend/customer geocodes as the source of truth.
-      // Browser-side address search is only used when coordinates are missing.
-      const refinedWarehouse = await refineWaypointByAddress(routeData.warehouse)
-      const refinedStops = await Promise.all(routeData.stops.map((stop) => refineWaypointByAddress(stop)))
-
-      let roadPath: RouteMapCoordinate[] = []
-      try {
-        roadPath = await buildRoadPath([refinedWarehouse, ...refinedStops])
-      } catch {
-        roadPath = []
-      }
-
-      const backendPath = dedupePath(routeData.path)
-      const path = roadPath.length >= 2 ? roadPath : backendPath.length >= 2 ? backendPath : buildStraightFallbackPath(refinedWarehouse, refinedStops)
-      const pathLabel = roadPath.length >= 2 ? "Road route" : routeData.routing_status === "optimized" && backendPath.length >= 2 ? "Valhalla route" : "Fallback route"
-
-      if (!isCancelled) {
-        setResolvedRouteData({
-          warehouse: refinedWarehouse,
-          stops: refinedStops,
-          path,
-          pathLabel,
-        })
-      }
-    })().catch(() => {
-      if (!isCancelled) {
-        setResolvedRouteData({
-          warehouse: routeData.warehouse,
-          stops: routeData.stops,
-          path: buildStraightFallbackPath(routeData.warehouse, routeData.stops),
-          pathLabel: "Fallback route",
-        })
-      }
+    setResolvedRouteData({
+      warehouse: routeData.warehouse,
+      origin,
+      stops,
+      path,
+      pathLabel,
     })
-
-    return () => {
-      isCancelled = true
-    }
   }, [routeData])
 
   useEffect(() => {
@@ -312,9 +201,10 @@ export function RouteMap({ routeData, className }: RouteMapProps) {
       (routeData
         ? {
             warehouse: routeData.warehouse,
-            stops: routeData.stops,
-            path: buildStraightFallbackPath(routeData.warehouse, routeData.stops),
-            pathLabel: routeData.routing_status === "optimized" ? "Valhalla route" : "Fallback route",
+            origin: routeData.active_origin ?? routeData.warehouse,
+            stops: routeData.active_stop ? [routeData.active_stop] : routeData.stops,
+            path: buildStraightFallbackPath(routeData.active_origin ?? routeData.warehouse, routeData.active_stop ? [routeData.active_stop] : routeData.stops),
+            pathLabel: routeData.routing_status === "optimized" ? "Active road route" : routeData.routing_status === "completed" ? "Route completed" : "Fallback route",
           }
         : null),
     [resolvedRouteData, routeData],
@@ -351,10 +241,10 @@ export function RouteMap({ routeData, className }: RouteMapProps) {
         const layers = layersRef.current
         layers.clearLayers()
 
-        const warehouseLatLng: [number, number] = [displayRoute.warehouse.latitude, displayRoute.warehouse.longitude]
+                const originLatLng: [number, number] = [displayRoute.origin.latitude, displayRoute.origin.longitude]
         const stopLatLngs = displayRoute.stops.map((stop) => [stop.latitude, stop.longitude] as [number, number])
         const pathLatLngs = displayRoute.path.map((coordinate) => [coordinate.latitude, coordinate.longitude] as [number, number])
-        const allLatLngs = [warehouseLatLng, ...stopLatLngs]
+        const allLatLngs = [originLatLng, ...stopLatLngs]
 
         if (pathLatLngs.length >= 2) {
           L.polyline(pathLatLngs, {
@@ -366,15 +256,17 @@ export function RouteMap({ routeData, className }: RouteMapProps) {
           }).addTo(layers)
         }
 
-        L.marker(warehouseLatLng, {
+        const originLabel = displayRoute.origin.route_stop_id ? `S${displayRoute.origin.sequence ?? ""}` : "W"
+
+        L.marker(originLatLng, {
           icon: L.divIcon({
             className: "farm2fork-route-marker",
-            html: buildMarkerHtml("W", "#17301c"),
+            html: buildMarkerHtml(originLabel, "#17301c"),
             iconSize: [32, 32],
             iconAnchor: [16, 16],
           }),
         })
-          .bindPopup(`<strong>${displayRoute.warehouse.label}</strong><br/>${displayRoute.warehouse.address ?? "Warehouse"}`)
+          .bindPopup(`<strong>${displayRoute.origin.label}</strong><br/>${displayRoute.origin.address ?? "Current origin"}`)
           .addTo(layers)
 
         displayRoute.stops.forEach((stop, index) => {
@@ -393,7 +285,7 @@ export function RouteMap({ routeData, className }: RouteMapProps) {
         if (allLatLngs.length > 1) {
           map.fitBounds(allLatLngs, { padding: [28, 28] })
         } else {
-          map.setView(warehouseLatLng, 13)
+          map.setView(originLatLng, 13)
         }
 
         window.requestAnimationFrame(() => {
