@@ -62,6 +62,7 @@ class TrackingService:
             stop_sequence=route_stop.sequence if route_stop is not None else None,
             stop_status=route_stop.stop_status if route_stop is not None else None,
             estimated_arrival=self._ensure_utc(route_stop.estimated_arrival) if route_stop is not None else None,
+            scheduled_for=self._ensure_utc(route_stop.estimated_arrival) if route_stop and route_stop.estimated_arrival else None,
             assigned_driver_id=assignment.driver_id if assignment is not None else None,
             assignment_status=assignment.assignment_status if assignment is not None else None,
             dispatched_at=self._ensure_utc(execution.dispatched_at),
