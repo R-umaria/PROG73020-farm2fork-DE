@@ -88,7 +88,7 @@ class ValhallaClient:
             leg_duration = float(leg["summary"]["time"])
             leg_distance = float(leg["summary"]["length"])
             legs.append(RouteLeg(
-                sequence=i + 2,  # leg i connects stop i to stop i+1; ETA is for the arrival stop
+                sequence=i + 1,  # when called with warehouse first, leg 1 arrives at stop 1
                 duration_seconds=leg_duration,
                 distance_km=leg_distance,
                 eta_offset_seconds=cumulative_seconds + leg_duration,

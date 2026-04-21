@@ -27,6 +27,18 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://postgres:password@db:5432/farm2fork
+      VALHALLA_ENABLE_ROUTING: ${VALHALLA_ENABLE_ROUTING:-true}
+      VALHALLA_BASE_URL: ${VALHALLA_BASE_URL:-http://host.docker.internal:8002}
+      WAREHOUSE_NAME: ${WAREHOUSE_NAME:-Farm2Fork Warehouse}
+      WAREHOUSE_STREET: ${WAREHOUSE_STREET:-100 Queen St W}
+      WAREHOUSE_CITY: ${WAREHOUSE_CITY:-Toronto}
+      WAREHOUSE_PROVINCE: ${WAREHOUSE_PROVINCE:-ON}
+      WAREHOUSE_POSTAL_CODE: ${WAREHOUSE_POSTAL_CODE:-M5H 2N2}
+      WAREHOUSE_COUNTRY: ${WAREHOUSE_COUNTRY:-Canada}
+      WAREHOUSE_LATITUDE: ${WAREHOUSE_LATITUDE:-43.6534817}
+      WAREHOUSE_LONGITUDE: ${WAREHOUSE_LONGITUDE:--79.3839347}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     restart: unless-stopped

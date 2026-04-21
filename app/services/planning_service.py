@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from datetime import timedelta
+from datetime import timedelta, timezone
 from typing import Literal
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.delivery_status import INITIAL_DELIVERY_EXECUTION_STATUS
+from app.integrations.errors import UpstreamBadResponseError, UpstreamNotFoundError, UpstreamTimeoutError
+from app.integrations.geocoding_client import GeocodingClient
+from app.integrations.valhalla_client import ValhallaClient
+from app.repositories.customer_repository import CustomerRepository
 from app.repositories.execution_repository import ExecutionRepository
 from app.repositories.planning_repository import PlanningRepository
 from app.schemas.planning import (
@@ -16,19 +22,15 @@ from app.schemas.planning import (
     BacklogPlanningGroup,
     BacklogPlanningSkip,
     GroupBacklogResponse,
+    PlanningResponse,
     ScheduleRoutesResponse,
     ScheduledDriverAssignment,
     ScheduledRouteGroup,
     ScheduledRouteStop,
 )
+from app.schemas.routing import RouteCoordinate, RouteMapResponse, RouteMapWaypoint
 from app.services.driver_assignment_policy import DriverAssignmentPolicy
-
-from app.integrations.errors import UpstreamBadResponseError, UpstreamNotFoundError, UpstreamTimeoutError
-from app.integrations.geocoding_client import GeocodingClient
-from app.repositories.customer_repository import CustomerRepository
-from app.schemas.planning import PlanningResponse
-
-from app.integrations.valhalla_client import ValhallaClient
+from app.utils.polyline import decode_polyline
 
 RegionSource = Literal["postal_prefix", "city_province"]
 HandlingType = Literal["delivery", "pickup"]
@@ -83,8 +85,8 @@ class PlanningService:
             message="Pending geocoding completed",
             resolved_count=resolved_count,
             failed_count=failed_count,
-        ) 
-    
+        )
+
     def group_backlog(self) -> GroupBacklogResponse:
         grouped: dict[tuple[str, str], list[BacklogPlanningCandidate]] = defaultdict(list)
         skips: list[BacklogPlanningSkip] = []
@@ -211,9 +213,6 @@ class PlanningService:
                     current_load_before_assignment=selected_driver.current_load,
                 )
 
-            # Scheduling is the explicit point where an execution enters the canonical
-            # `scheduled` state, so we create that execution record once the route,
-            # stops, and any initial assignment already exist.
             for candidate in planning_group.candidates:
                 existing_execution = self.execution_repo.get_by_delivery_request_id(candidate.delivery_request_id)
                 if existing_execution is None:
@@ -248,11 +247,8 @@ class PlanningService:
             unassigned_group_count=unassigned_group_count,
             route_groups=scheduled_groups,
         )
-    
-    def optimize_route_group(self, route_group_id: UUID) -> bool:
-        from app.core.config import settings
-        from datetime import timezone
 
+    def optimize_route_group(self, route_group_id: UUID) -> bool:
         if not settings.valhalla_enable_routing:
             return False
 
@@ -260,26 +256,21 @@ class PlanningService:
         if group is None:
             return False
 
-        stops = sorted(group.stops, key=lambda s: (s.sequence, str(s.id)))
-
-        # collect geocodes and skip stops with no coordinates
-        locations: list[tuple[float, float]] = []
-        valid_stops = []
-        for stop in stops:
-            cd = stop.delivery_request.customer_details if stop.delivery_request else None
-            if cd and cd.latitude is not None and cd.longitude is not None:
-                locations.append((float(cd.latitude), float(cd.longitude)))
-                valid_stops.append(stop)
-
-        if len(locations) < 2:
+        valid_stops = self._routeable_stops(group)
+        if not valid_stops:
             return False
+
+        warehouse_location = (settings.warehouse_latitude, settings.warehouse_longitude)
+        locations: list[tuple[float, float]] = [warehouse_location] + [
+            (float(stop.delivery_request.customer_details.latitude), float(stop.delivery_request.customer_details.longitude))
+            for stop in valid_stops
+        ]
 
         try:
             result = self.valhalla_client.optimized_route(locations)
         except Exception:
             return False
 
-        # persist route group summary
         self.repo.update_route_group_routing(
             route_group_id=route_group_id,
             estimated_distance_km=result.total_distance_km,
@@ -287,23 +278,55 @@ class PlanningService:
             route_payload=result.raw_payload,
         )
 
-        base_time = valid_stops[0].estimated_arrival
-        if base_time is not None and base_time.tzinfo is None:
-            base_time = base_time.replace(tzinfo=timezone.utc)
+        departure_time = group.scheduled_date
+        if departure_time is not None and departure_time.tzinfo is None:
+            departure_time = departure_time.replace(tzinfo=timezone.utc)
 
-        if base_time is not None:
-            from datetime import timedelta
-            for leg in result.legs:
-                # leg.sequence is for arrival stop
-                idx = leg.sequence - 1  # 0 into valid_stops
-                if idx < len(valid_stops):
-                    eta = base_time + timedelta(seconds=leg.eta_offset_seconds)
-                    self.repo.update_route_stop_eta(
-                        route_stop_id=valid_stops[idx].id,
-                        estimated_arrival=eta,
-                    )
+        if departure_time is not None:
+            for stop, leg in zip(valid_stops, result.legs):
+                eta = departure_time + timedelta(seconds=leg.eta_offset_seconds)
+                self.repo.update_route_stop_eta(
+                    route_stop_id=stop.id,
+                    estimated_arrival=eta,
+                )
 
         return True
+
+    def get_route_map(self, route_group_id: UUID) -> RouteMapResponse:
+        group = self.repo.get_route_group_by_id(route_group_id)
+        if group is None:
+            raise ValueError(f"Route group {route_group_id} was not found")
+
+        routeable_stops = self._routeable_stops(group)
+        warehouse = RouteMapWaypoint(
+            latitude=settings.warehouse_latitude,
+            longitude=settings.warehouse_longitude,
+            label=settings.warehouse_name,
+            address=settings.warehouse_address,
+            sequence=0,
+        )
+
+        stops = [self._build_route_waypoint(stop) for stop in routeable_stops]
+        optimized_path = self._decode_route_payload(group.route_payload)
+        if optimized_path:
+            routing_status = "optimized"
+            path = optimized_path
+        else:
+            routing_status = "fallback"
+            path = self._build_fallback_path(warehouse, stops)
+
+        return RouteMapResponse(
+            route_group_id=group.id,
+            route_group_name=group.name,
+            route_group_status=group.status,
+            routing_status=routing_status,
+            provider="Valhalla + OpenStreetMap" if optimized_path else "Fallback path + OpenStreetMap",
+            warehouse=warehouse,
+            stops=stops,
+            path=path,
+            estimated_distance_km=float(group.estimated_distance_km) if group.estimated_distance_km is not None else None,
+            estimated_duration_min=group.estimated_duration_min,
+        )
 
     def close(self) -> None:
         self.db.close()
@@ -383,3 +406,89 @@ class PlanningService:
     @staticmethod
     def _has_text(value: str | None) -> bool:
         return isinstance(value, str) and bool(value.strip())
+
+    @staticmethod
+    def _routeable_stops(group) -> list:
+        stops = sorted(group.stops, key=lambda stop: (stop.sequence, str(stop.id)))
+        routeable = []
+        for stop in stops:
+            customer_details = stop.delivery_request.customer_details if stop.delivery_request else None
+            if customer_details is None:
+                continue
+            if customer_details.latitude is None or customer_details.longitude is None:
+                continue
+            routeable.append(stop)
+        return routeable
+
+    @staticmethod
+    def _build_route_waypoint(stop) -> RouteMapWaypoint:
+        customer_details = stop.delivery_request.customer_details
+        assert customer_details is not None
+        return RouteMapWaypoint(
+            latitude=float(customer_details.latitude),
+            longitude=float(customer_details.longitude),
+            label=customer_details.customer_name,
+            address=", ".join(
+                part.strip()
+                for part in [
+                    customer_details.street,
+                    customer_details.city,
+                    customer_details.province,
+                    customer_details.postal_code,
+                    customer_details.country,
+                ]
+                if isinstance(part, str) and part.strip()
+            ) or None,
+            sequence=stop.sequence,
+            route_stop_id=stop.id,
+            delivery_request_id=stop.delivery_request_id,
+            order_id=stop.delivery_request.order_id if stop.delivery_request is not None else None,
+            stop_status=stop.stop_status,
+        )
+
+    @staticmethod
+    def _decode_route_payload(route_payload: dict | None) -> list[RouteCoordinate]:
+        if not isinstance(route_payload, dict):
+            return []
+
+        trip = route_payload.get("trip")
+        if not isinstance(trip, dict):
+            return []
+
+        legs = trip.get("legs")
+        if not isinstance(legs, list):
+            return []
+
+        decoded_points: list[RouteCoordinate] = []
+        for leg in legs:
+            if not isinstance(leg, dict):
+                continue
+            encoded_shape = leg.get("shape")
+            if not isinstance(encoded_shape, str) or not encoded_shape:
+                continue
+            leg_points = [
+                RouteCoordinate(latitude=lat, longitude=lon)
+                for lat, lon in decode_polyline(encoded_shape, precision=6)
+            ]
+            if not leg_points:
+                continue
+            if decoded_points and leg_points:
+                leg_points = leg_points[1:]
+            decoded_points.extend(leg_points)
+
+        return decoded_points
+
+    @staticmethod
+    def _build_fallback_path(warehouse: RouteMapWaypoint, stops: list[RouteMapWaypoint]) -> list[RouteCoordinate]:
+        coordinates = [
+            RouteCoordinate(latitude=warehouse.latitude, longitude=warehouse.longitude),
+            *[
+                RouteCoordinate(latitude=stop.latitude, longitude=stop.longitude)
+                for stop in stops
+            ],
+        ]
+        deduped: list[RouteCoordinate] = []
+        for coordinate in coordinates:
+            if not deduped or deduped[-1] != coordinate:
+                deduped.append(coordinate)
+        return deduped

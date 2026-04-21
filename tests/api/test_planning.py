@@ -309,3 +309,64 @@ def test_schedule_routes_creates_route_groups_with_deterministic_stop_sequence_a
         assert sum(group.total_stops for group in created_groups) == 3
     finally:
         db.close()
+
+
+def test_get_route_group_map_returns_warehouse_and_stop_coordinates():
+    db = SessionLocal()
+    try:
+        request_repo = DeliveryRequestRepository(db)
+        customer_repo = CustomerRepository(db)
+        planning_repo = PlanningRepository(db)
+
+        first_delivery = _seed_delivery_request(
+            order_id=2001,
+            customer_id=601,
+            customer_repo=customer_repo,
+            request_repo=request_repo,
+            city="Toronto",
+            province="ON",
+            postal_code="M5V 1A1",
+        )
+        second_delivery = _seed_delivery_request(
+            order_id=2002,
+            customer_id=602,
+            customer_repo=customer_repo,
+            request_repo=request_repo,
+            city="Mississauga",
+            province="ON",
+            postal_code="L5B 1M1",
+        )
+
+        route_group = planning_repo.create_route_group(
+            name="Driver Route",
+            scheduled_date=datetime(2026, 4, 9, 9, 0, tzinfo=timezone.utc),
+            status="scheduled",
+            zone_code="postal_prefix:M5V",
+            total_stops=2,
+        )
+        planning_repo.add_route_stop(
+            route_group_id=route_group.id,
+            delivery_request_id=UUID(first_delivery["id"]),
+            sequence=1,
+            stop_status="planned",
+        )
+        planning_repo.add_route_stop(
+            route_group_id=route_group.id,
+            delivery_request_id=UUID(second_delivery["id"]),
+            sequence=2,
+            stop_status="planned",
+        )
+    finally:
+        db.close()
+
+    response = client.get(f"/api/planning/route-group/{route_group.id}/map")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["route_group_id"] == str(route_group.id)
+    assert body["warehouse"]["label"] == "Farm2Fork Warehouse"
+    assert body["routing_status"] in {"fallback", "optimized"}
+    assert len(body["stops"]) == 2
+    assert body["stops"][0]["sequence"] == 1
+    assert body["stops"][1]["sequence"] == 2
+    assert len(body["path"]) >= 3
