@@ -276,11 +276,15 @@ function ShiftSelectionScreen() {
         <header className="rounded-[30px] border border-white/10 bg-[rgba(255,255,255,0.07)] px-4 py-4 shadow-[0_24px_80px_rgba(0,0,0,0.18)] backdrop-blur-md sm:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/10">
-                <Image src="/branding/logo-mark.png" alt="Farm2Fork" width={40} height={40} className="h-10 w-auto" priority />
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/45 bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.68))] shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_18px_40px_rgba(8,20,12,0.18)] backdrop-blur-xl">
+                <Image src="/branding/logo-mark.png" alt="Farm2Fork" width={52} height={52} className="h-12 w-auto" priority />
               </div>
               <div>
-                <p className="text-sm uppercase tracking-[0.18em] text-[var(--muted-teal)]">Farm2Fork</p>
+                <p className="text-sm font-bold uppercase tracking-[0.18em]">
+                  <span className="text-[var(--muted-teal)]">Farm</span>
+                  <span className="text-[1.21em] leading-none text-[#B78517]">2</span>
+                  <span className="text-[var(--muted-teal)]">Fork</span>
+                </p>
                 <h1 className="mt-1 text-2xl font-semibold text-white">Driver Portal</h1>
                 <p className="mt-1 text-sm text-white/60">
                   {session ? "Available shifts and driver account details." : "Sign in to continue."}
@@ -307,7 +311,10 @@ function ShiftSelectionScreen() {
             <div className="rounded-[34px] border border-white/10 bg-[rgba(255,255,255,0.07)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.18)] backdrop-blur-md sm:p-8">
               <p className="text-sm uppercase tracking-[0.18em] text-[var(--muted-teal)]">Welcome</p>
               <h2 className="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">
-                Farm2Fork delivery operations
+                <span className="text-[var(--muted-teal)]">Farm</span>
+                  <span className="text-[1.21em] leading-none text-[#B78517]">2</span>
+                  <span className="text-[var(--muted-teal)]">Fork </span>
+                   delivery operations
               </h2>
               <p className="mt-4 max-w-2xl text-base leading-7 text-white/72 sm:text-lg">
                 Sign in with your driver account to view and claim available shifts.
