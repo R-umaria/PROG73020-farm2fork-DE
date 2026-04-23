@@ -7,15 +7,22 @@ function getBackendBaseUrl(): string {
     process.env.INTERNAL_API_BASE_URL,
     process.env.NEXT_PUBLIC_API_BASE_URL,
     process.env.API_BASE_URL,
-    "http://localhost:8000",
   ]
 
   for (const candidate of candidates) {
     const value = candidate?.trim()
-    if (value) return value.replace(/\/$/, "")
+    if (!value) continue
+
+    const normalized = value.replace(/\/$/, "")
+
+    if (normalized === "http://localhost:8000" || normalized === "http://127.0.0.1:8000") {
+      return "http://app:8000"
+    }
+
+    return normalized
   }
 
-  return "http://localhost:8000"
+  return "http://app:8000"
 }
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
