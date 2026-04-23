@@ -1,5 +1,5 @@
 import type { DeliveryStatus } from "@/lib/delivery-status"
-const DEFAULT_API_BASE_URL = "http://localhost:8000"
+const DEFAULT_API_BASE_URL = "/backend"
 export interface ApiError extends Error { status?: number }
 export interface DriverSummary { driver_id: number; driver_name: string; vehicle_type: string; driver_status: string }
 export interface DriverAuthSession { email: string; user_type: string; expires_at: string | null; driver_id: number; driver_name: string; vehicle_type: string; driver_status: string; active_route_group_id?: string | null; active_route_group_name?: string | null; active_zone_code?: string | null }
@@ -16,15 +16,9 @@ export interface DeliveryRecord { id: string; order_id: number; customer_id: num
 export interface DeliveryStatusHistoryEntry { status: DeliveryStatus; changed_at: string; changed_by?: string | null; reason?: string | null }
 export interface DeliveryTracking { order_id: number; customer_id: number | null; delivery_request_id: string | null; delivery_execution_id: string; delivery_status: DeliveryStatus; latest_status_at: string | null; latest_status_reason: string | null; route_group_id: string | null; route_group_status: string | null; route_stop_id: string | null; stop_sequence: number | null; stop_status: string | null; estimated_arrival: string | null; assigned_driver_id: number | null; assignment_status: string | null; dispatched_at: string | null; out_for_delivery_at: string | null; completed_at: string | null; failed_at: string | null; status_history: DeliveryStatusHistoryEntry[] }
 
-function inferBrowserApiBaseUrl(): string | null {
-  if (typeof window === "undefined") return null
-  const { protocol, hostname } = window.location
-  return `${protocol}//${hostname}:8000`
-}
-
 function getApiBaseUrl(): string {
   const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim()
-  return (configuredBaseUrl || inferBrowserApiBaseUrl() || DEFAULT_API_BASE_URL).replace(/\/$/, "")
+  return (configuredBaseUrl || DEFAULT_API_BASE_URL).replace(/\/$/, "")
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> { const response = await fetch(`${getApiBaseUrl()}${path}`, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers || {}) }, cache: "no-store" }); if (!response.ok) { let message = `Request failed with HTTP ${response.status}`; try { const payload = await response.json(); if (typeof payload?.detail === "string") message = payload.detail } catch {} const error = new Error(message) as ApiError; error.status = response.status; throw error } return response.json() as Promise<T> }
