@@ -78,12 +78,17 @@ class DemoSeedService:
             },
         ]
 
-        self._reset_existing_demo_shifts(shift_names)
+        existing_shift_names = {name for (name,) in self.db.query(RouteGroup.name).filter(RouteGroup.name.in_(shift_names)).all()}
+        created_shift_names: list[str] = []
 
         for idx, spec in enumerate(shift_specs):
+            if spec['name'] in existing_shift_names:
+                continue
+
             group = RouteGroup(name=spec['name'], scheduled_date=spec['scheduled_date'], status='scheduled', zone_code=spec['zone_code'], total_stops=len(spec['customers']), estimated_distance_km=spec['distance'], estimated_duration_min=spec['duration_min'])
             self.db.add(group)
             self.db.flush()
+            created_shift_names.append(spec['name'])
 
             for seq, customer in enumerate(spec['customers'], start=1):
                 cname, phone, street, city, province, postal, fallback_coords = customer
@@ -101,8 +106,9 @@ class DemoSeedService:
                 self.db.add(RouteStop(route_group_id=group.id, delivery_request_id=request.id, sequence=seq, estimated_arrival=spec['scheduled_date'] + timedelta(minutes=seq * 15), stop_status='scheduled'))
 
         self.db.commit()
-        self._optimize_seeded_route_groups(shift_names)
-        return len(shift_names)
+        if created_shift_names:
+            self._optimize_seeded_route_groups(created_shift_names)
+        return self.db.query(RouteGroup).filter(RouteGroup.name.in_(shift_names)).count()
 
     def _reset_existing_demo_shifts(self, shift_names: list[str]) -> None:
         groups = self.db.query(RouteGroup).filter(RouteGroup.name.in_(shift_names)).all()
